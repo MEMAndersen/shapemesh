@@ -1,0 +1,78 @@
+[project]
+name = "shapemesh"
+version = "0.1.0"
+description = "A Gmsh-powered geometry and meshing library: a closed set of 0-3D shapes, n-ary booleans, and MSH 4.1 I/O."
+readme = "README.md"
+authors = [
+    { name = "Mads Emil Schade Kruse", email = "MEMAndersen@gmail.com" },
+]
+requires-python = ">=3.12"
+license = "LGPL-2.1-or-later"
+keywords = ["gmsh", "mesh", "geometry", "msh", "finite-element", "cad"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
+dependencies = [
+    "gmsh>=4.15",
+    "numpy>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (import order)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade (modern syntax)
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins (no shadowing builtins)
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "ANN",  # flake8-annotations (strict, typed public API)
+    "T20",  # flake8-print (no stray prints)
+]
+ignore = [
+    "ANN401",  # `Any` is unavoidable across the numpy/gmsh boundary
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["shapemesh"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/shapemesh/__init__.py" = ["E402", "F401", "F811"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
