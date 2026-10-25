@@ -125,7 +125,6 @@ Rules:
 - `a | b`, `a & b`, and `a - b` desugar to binary `Union`, `Intersection`, and `Difference`.
 - N-ary booleans use the explicit classes.
 - Booleans require at least two operands of the same topological dimension.
-- Reusing the exact same shape object twice in one build is rejected.
 - An empty boolean result raises `GeometryError`.
 - `Difference(a, b, c)` means `a - (b ∪ c)`.
 
@@ -138,7 +137,6 @@ def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh
 - `settings` is required; no default.
 - A single `Shape` is normalized to a one-element sequence.
 - An empty sequence raises `GeometryError`.
-- Duplicate shape object identities raise `GeometryError`.
 
 ### 6.3 Mesh
 
@@ -190,9 +188,11 @@ ShapeMeshError(Exception)
 ```python
 type Vec3Like = Vec3 | Sequence[float] | np.ndarray
 
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Shape:
     label: str | None = None
+
 
 @dataclass(frozen=True, slots=True)
 class Vec3:
@@ -200,9 +200,11 @@ class Vec3:
     y: float
     z: float = 0.0
 
+
 @dataclass(frozen=True, slots=True)
 class Point(Shape):
     coord: Vec3
+
 
 @dataclass(frozen=True, slots=True)
 class Line(Shape):
@@ -258,22 +260,25 @@ class EntityRecord:
     dim: int
     tag: int
     bbox: tuple[float, float, float, float, float, float]
-    boundary: tuple[tuple[int, int], ...] = ()   # signed tags encode orientation
+    boundary: tuple[tuple[int, int], ...] = ()  # signed tags encode orientation
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NodeTable:
-    tags: np.ndarray                  # (N,) int
-    coords: np.ndarray                # (N, 3) float
-    entity_dim: np.ndarray | None = None   # (N,), -1 if unknown
+    tags: np.ndarray  # (N,) int
+    coords: np.ndarray  # (N, 3) float
+    entity_dim: np.ndarray | None = None  # (N,), -1 if unknown
     entity_tag: np.ndarray | None = None
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ElementBlock:
     entity_dim: int
     entity_tag: int
     type: ElementType
-    tags: np.ndarray                  # (M,) int
-    connectivity: np.ndarray          # (M, k), global node tags
+    tags: np.ndarray  # (M,) int
+    connectivity: np.ndarray  # (M, k), global node tags
+
 
 class Mesh:
     _nodes: NodeTable
@@ -306,11 +311,12 @@ class Mesh:
 @dataclass(frozen=True, slots=True, eq=False)
 class NumpyElementBlock:
     connectivity: np.ndarray  # (M, k), 0-based indices into coords
-    node_tags: np.ndarray     # (M, k), original Gmsh tags
+    node_tags: np.ndarray  # (M, k), original Gmsh tags
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NumpyMesh:
-    coords: np.ndarray        # (N, 3), global
+    coords: np.ndarray  # (N, 3), global
     blocks: dict[ElementType, NumpyElementBlock]
 ```
 
@@ -358,6 +364,7 @@ class MeshSettings:
     characteristic_length: float | None = None   # Mesh.MeshSizeMax
     order: int = 1                                # 1..5
     optimize: bool = True
+    verbose: bool = False  # show Gmsh terminal output (silenced by default)
     algorithm_2d: Algorithm2D | None = None
     algorithm_3d: Algorithm3D | None = None
     advanced: tuple[tuple[str, float | int | str], ...] = ()
@@ -509,8 +516,9 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 ## 10. Settings semantics
 
 - `characteristic_length` is a maximum size: set `Mesh.MeshSizeMax = h`; leave `MeshSizeMin` at the Gmsh default. Curvature can refine below `h`. `h` must be positive.
-- `order` is `1..5`; passed to `gmsh.model.mesh.generate(order)`.
+- `order` is `1..5`; applied via `gmsh.model.mesh.setOrder(order)` (the element order), while `generate` is given the model dimension.
 - `optimize=True` calls `optimize("")` for linear meshes and `optimize("HighOrder")` for order > 1.
+- `verbose=True` restores Gmsh terminal output, which is silenced by default.
 - `algorithm_2d` maps to `Mesh.Algorithm`; `algorithm_3d` maps to `Mesh.Algorithm3D`.
 - `advanced` is a tuple of `(option_name, value)` pairs applied after explicit fields. Integer/float values use `gmsh.option.setNumber`; strings use `setString`. Keys that conflict with explicit fields are rejected.
 - `with_` merges and revalidates via `dataclasses.replace`, which re-runs `__post_init__`; unknown kwargs raise `TypeError`.
@@ -547,7 +555,7 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 | Sphere | Radius > 0 |
 | Cube | `dx > 0`, `dy > 0`, `dz > 0` |
 | Cylinder | Start ≠ end; radius > 0 |
-| Booleans | ≥2 operands; same dimension; no duplicate object identity; non-empty result |
+| Booleans | ≥2 operands; same dimension; non-empty result |
 | Labels | Non-empty, stripped, ≤127 chars, no quotes/newlines |
 | Build | Non-empty shape sequence; required settings |
 

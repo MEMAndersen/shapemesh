@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .builder import build
 from .errors import (
     BuildError,
     GeometryError,
@@ -68,4 +69,5 @@ __all__ = [
     "Union",
     "Vec3",
     "Vec3Like",
+    "build",
 ]

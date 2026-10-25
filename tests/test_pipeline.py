@@ -1,0 +1,70 @@
+import pytest
+
+from shapemesh import (
+    Cube,
+    GeometryError,
+    Intersection,
+    Mesh,
+    MeshSettings,
+    Union,
+    build,
+)
+
+
+def test_build_single_cube():
+    mesh = build(Cube((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
+    assert mesh.num_nodes > 0
+    assert mesh.num_elements > 0
+    assert mesh.metadata.dim == 3
+    assert len(mesh.entities(dim=3)) == 1
+    assert mesh.physical_group("box", 3).entities == ((3, 1),)
+
+
+def test_build_two_overlapping_cubes_fragment():
+    a = Cube((0, 0, 0), 1, 1, 1, label="a")
+    b = Cube((0.5, 0, 0), 1, 1, 1, label="b")
+    mesh = build([a, b], MeshSettings())
+
+    assert len(mesh.entities(dim=3)) == 3
+    group_a = set(mesh.physical_group("a", 3).entities)
+    group_b = set(mesh.physical_group("b", 3).entities)
+    assert len(group_a) == 2
+    assert len(group_b) == 2
+    # the overlap piece belongs to both groups
+    assert len(group_a & group_b) == 1
+
+
+def test_build_single_shape_is_normalized():
+    mesh = build(Cube((0, 0, 0), 1, 1, 1), MeshSettings())
+    assert mesh.num_elements > 0
+
+
+def test_boolean_union():
+    a = Cube((0, 0, 0), 1, 1, 1)
+    b = Cube((0.5, 0, 0), 1, 1, 1)
+    mesh = build(Union(a, b, label="u"), MeshSettings())
+    assert len(mesh.entities(dim=3)) == 1
+    assert mesh.physical_group("u", 3).entities == ((3, 1),)
+
+
+def test_empty_intersection_raises():
+    a = Cube((0, 0, 0), 1, 1, 1)
+    b = Cube((5, 5, 5), 1, 1, 1)  # disjoint
+    with pytest.raises(GeometryError):
+        build(Intersection(a, b), MeshSettings())
+
+
+def test_shape_reuse_allowed():
+    a = Cube((0, 0, 0), 1, 1, 1)
+    mesh = build([a, a], MeshSettings())  # reusing the same object is allowed
+    assert mesh.num_elements > 0
+
+
+def test_roundtrip_through_msh(tmp_path):
+    mesh = build(Cube((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
+    path = tmp_path / "cube.msh"
+    mesh.write_msh(path)
+    reread = Mesh.read_msh(path)
+    assert reread.num_nodes == mesh.num_nodes
+    assert reread.num_elements == mesh.num_elements
+    assert reread.physical_group("box", 3).entities == mesh.physical_group("box", 3).entities

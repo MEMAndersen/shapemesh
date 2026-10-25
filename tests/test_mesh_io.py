@@ -124,6 +124,7 @@ def test_gmsh_roundtrip(tmp_path):
     gmsh = pytest.importorskip("gmsh")
     gmsh.initialize()
     try:
+        gmsh.option.setNumber("General.Terminal", 0)  # keep the test output quiet
         gmsh.model.add("box")
         gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)
         gmsh.model.occ.synchronize()

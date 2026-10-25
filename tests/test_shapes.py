@@ -180,9 +180,12 @@ def test_boolean_validation_errors():
     with pytest.raises(GeometryError):
         Union(a, Point((0, 0, 0)))  # mixed dimensions
     with pytest.raises(GeometryError):
-        Union(a, a)  # duplicate object identity
-    with pytest.raises(GeometryError):
         Union(a, "not a shape")
+
+
+def test_boolean_allows_reusing_same_object():
+    a = Cube((0, 0, 0), 1, 1, 1)
+    assert len(Union(a, a).operands) == 2
 
 
 def test_boolean_distinct_equal_objects_allowed():

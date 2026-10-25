@@ -75,6 +75,7 @@ class MeshSettings:
     characteristic_length: float | None = None  # Mesh.MeshSizeMax
     order: int = 1  # 1..5
     optimize: bool = True
+    verbose: bool = False
     algorithm_2d: Algorithm2D | None = None
     algorithm_3d: Algorithm3D | None = None
     advanced: tuple[tuple[str, float | int | str], ...] = ()
@@ -92,6 +93,8 @@ class MeshSettings:
             raise ValueError(f"order must be in 1..5, got {self.order}")
         if not isinstance(self.optimize, bool):
             raise ValueError(f"optimize must be a bool, got {type(self.optimize).__name__}")
+        if not isinstance(self.verbose, bool):
+            raise ValueError(f"verbose must be a bool, got {type(self.verbose).__name__}")
         if self.algorithm_2d is not None and not isinstance(self.algorithm_2d, Algorithm2D):
             raise ValueError(
                 "algorithm_2d must be an Algorithm2D or None, "

@@ -33,6 +33,13 @@ def test_optimize_must_be_bool():
         MeshSettings(optimize=1)
 
 
+def test_verbose_defaults_false_and_must_be_bool():
+    assert MeshSettings().verbose is False
+    assert MeshSettings(verbose=True).verbose is True
+    with pytest.raises(ValueError):
+        MeshSettings(verbose=1)
+
+
 def test_algorithm_enums():
     assert Algorithm2D.DELAUNAY == 5
     assert Algorithm2D.QUASI_STRUCTURED_QUAD == 11

@@ -16,6 +16,7 @@ import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
+from typing import Any
 
 import numpy as np
 
@@ -86,6 +87,10 @@ class Shape:
 
     @property
     def dimension(self) -> int:
+        raise NotImplementedError
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        """Realize this shape as OCC entities, returning its top-dimension dimtags."""
         raise NotImplementedError
 
     def __post_init__(self) -> None:
@@ -206,6 +211,10 @@ class Point(Shape):
     def dimension(self) -> int:
         return 0
 
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        tag = gmsh.model.occ.addPoint(self.coord.x, self.coord.y, self.coord.z, 0.0)
+        return [(0, tag)]
+
 
 @dataclass(frozen=True, slots=True, init=False)
 class Line(Shape):
@@ -226,6 +235,12 @@ class Line(Shape):
     @property
     def dimension(self) -> int:
         return 1
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        occ = gmsh.model.occ
+        p1 = occ.addPoint(self.start.x, self.start.y, self.start.z, 0.0)
+        p2 = occ.addPoint(self.end.x, self.end.y, self.end.z, 0.0)
+        return [(1, occ.addLine(p1, p2))]
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -249,6 +264,17 @@ class Polyline(Shape):
     def closed(self) -> bool:
         return self.points[0] == self.points[-1]
 
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        occ = gmsh.model.occ
+        unique = self.points[:-1] if self.closed else self.points
+        points = [occ.addPoint(p.x, p.y, p.z, 0.0) for p in unique]
+        if self.closed:
+            n = len(points)
+            lines = [occ.addLine(points[i], points[(i + 1) % n]) for i in range(n)]
+        else:
+            lines = [occ.addLine(points[i], points[i + 1]) for i in range(len(points) - 1)]
+        return [(1, t) for t in lines]
+
 
 @dataclass(frozen=True, slots=True, init=False)
 class Polygon(Shape):
@@ -266,6 +292,13 @@ class Polygon(Shape):
     @property
     def dimension(self) -> int:
         return 2
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        occ = gmsh.model.occ
+        points = [occ.addPoint(p.x, p.y, p.z, 0.0) for p in self.points]
+        lines = [occ.addLine(points[i], points[(i + 1) % len(points)]) for i in range(len(points))]
+        loop = occ.addCurveLoop(lines)
+        return [(2, occ.addPlaneSurface([loop]))]
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -292,6 +325,12 @@ class Rectangle(Shape):
     def dimension(self) -> int:
         return 2
 
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        surf = gmsh.model.occ.addRectangle(
+            self.origin.x, self.origin.y, self.origin.z, self.dx, self.dy
+        )
+        return [(2, surf)]
+
 
 @dataclass(frozen=True, slots=True, init=False)
 class Sphere(Shape):
@@ -311,6 +350,10 @@ class Sphere(Shape):
     @property
     def dimension(self) -> int:
         return 3
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        vol = gmsh.model.occ.addSphere(self.center.x, self.center.y, self.center.z, self.radius)
+        return [(3, vol)]
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -340,6 +383,12 @@ class Cube(Shape):
     def dimension(self) -> int:
         return 3
 
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        vol = gmsh.model.occ.addBox(
+            self.origin.x, self.origin.y, self.origin.z, self.dx, self.dy, self.dz
+        )
+        return [(3, vol)]
+
 
 @dataclass(frozen=True, slots=True, init=False)
 class Cylinder(Shape):
@@ -365,6 +414,13 @@ class Cylinder(Shape):
     @property
     def dimension(self) -> int:
         return 3
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        axis = self.end - self.start
+        vol = gmsh.model.occ.addCylinder(
+            self.start.x, self.start.y, self.start.z, axis.x, axis.y, axis.z, self.radius
+        )
+        return [(3, vol)]
 
 
 # -- validation helpers ----------------------------------------------------
@@ -440,23 +496,65 @@ class _Boolean(Shape):
         _validate_boolean_operands(self.operands)
         Shape.__post_init__(self)
 
+    def _filter_result(self, dimtags: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        result = [d for d in dimtags if d[0] == self.dimension]
+        if not result:
+            raise GeometryError(f"{type(self).__name__} produced an empty result")
+        return result
+
 
 class Union(_Boolean):
-    """Boolean union of two or more same-dimension operands."""
+    """Boolean union of two or more same-dimension operands.
+
+    ``Union(a, b, c)`` realizes the set union of all operands. Union is
+    associative, so the n-ary form equals nested binary unions.
+    """
 
     __slots__ = ()
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        operands = [operand._realize(gmsh) for operand in self.operands]
+        tools = [dimtag for operand in operands[1:] for dimtag in operand]
+        result, _ = gmsh.model.occ.fuse(operands[0], tools, removeObject=True, removeTool=True)
+        return self._filter_result(result)
 
 
 class Intersection(_Boolean):
-    """Boolean intersection of two or more same-dimension operands."""
+    """Boolean intersection of two or more same-dimension operands.
+
+    ``Intersection(a, b, c)`` realizes the region common to all operands, by
+    chaining pairwise intersections. Intersection is associative, so this equals
+    ``Intersection(Intersection(a, b), c)``.
+
+    Note: Gmsh's ``occ.intersect(object, tools)`` computes the common part of
+    the object and the union of the tools instead, so the n-ary intersection
+    cannot be expressed in a single Gmsh call.
+    """
 
     __slots__ = ()
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        result = self.operands[0]._realize(gmsh)
+        for operand in self.operands[1:]:
+            result, _ = gmsh.model.occ.intersect(
+                result, operand._realize(gmsh), removeObject=True, removeTool=True
+            )
+        return self._filter_result(result)
 
 
 class Difference(_Boolean):
-    """Boolean difference: the first operand minus the union of the rest."""
+    """Boolean difference: the first operand minus the union of the rest.
+
+    ``Difference(a, b, c)`` realizes ``a`` minus the union of ``b`` and ``c``.
+    """
 
     __slots__ = ()
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        object_dimtags = self.operands[0]._realize(gmsh)
+        tools = [dimtag for operand in self.operands[1:] for dimtag in operand._realize(gmsh)]
+        result, _ = gmsh.model.occ.cut(object_dimtags, tools, removeObject=True, removeTool=True)
+        return self._filter_result(result)
 
 
 def _validate_boolean_operands(operands: tuple[Shape, ...]) -> None:
@@ -469,6 +567,3 @@ def _validate_boolean_operands(operands: tuple[Shape, ...]) -> None:
             )
     if len({op.dimension for op in operands}) != 1:
         raise GeometryError("boolean operands must share the same topological dimension")
-    ids = [id(op) for op in operands]
-    if len(set(ids)) != len(ids):
-        raise GeometryError("a boolean operation cannot reuse the same shape object twice")
