@@ -80,6 +80,18 @@ def test_point_only_meshing():
     assert mesh.metadata.dim == 0
 
 
+@pytest.mark.parametrize(
+    "shape",
+    [Ellipse((1, 2, 3), 1, 2), EllipticalDisk((1, 2, 3), 1, 2)],
+    ids=["curve", "disk"],
+)
+def test_ellipse_with_y_major_axis(shape):
+    mesh = build(shape, MeshSettings())
+
+    entity = mesh.entities(dim=shape.dimension)[0]
+    assert entity.bbox == pytest.approx((0, 0, 3, 2, 4, 3), abs=1e-6)
+
+
 def test_primitive_group_labeling():
     mesh = build(Box((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
     assert len(mesh.physical_group("box", 3).entities) == 1

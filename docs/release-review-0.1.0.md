@@ -74,7 +74,8 @@ empty `dist/` and inspect them before upload.
 
 ### M1. Valid ellipses with `rx < ry` cannot be built
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/shapes.py:443-446`, `:605-607`
 
 Both `Ellipse((0, 0), 1, 2)` and `EllipticalDisk((0, 0), 1, 2)` raise Gmsh's
@@ -369,3 +370,7 @@ classes, functions, methods, and properties against `AGENTS.md`.
 - 2026-10-25: H1/H2 verification: 72 tests passed, Ruff lint and formatting
   passed, and Pyright reported 0 errors. An order-3 box also retained
   `LINE4`/`TRI10`/`TET20` with default optimization enabled.
+- 2026-10-25: Fixed M1 by passing the larger ellipse radius to OCC first and
+  selecting a y major axis when `ry > rx`. Added curve and disk regressions with
+  a nonzero center that verify the resulting x/y/z bounding extents. Verification:
+  74 tests passed, Ruff lint and formatting passed, and Pyright reported 0 errors.

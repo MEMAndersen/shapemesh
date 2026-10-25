@@ -441,8 +441,17 @@ class Ellipse(Shape):
         return 1
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        major_radius = max(self.rx, self.ry)
+        minor_radius = min(self.rx, self.ry)
+        x_axis = (1, 0, 0) if self.rx >= self.ry else (0, 1, 0)
         curve = gmsh.model.occ.addEllipse(
-            self.center.x, self.center.y, self.center.z, self.rx, self.ry
+            self.center.x,
+            self.center.y,
+            self.center.z,
+            major_radius,
+            minor_radius,
+            zAxis=(0, 0, 1),
+            xAxis=x_axis,
         )
         return [(1, curve)]
 
@@ -603,7 +612,18 @@ class EllipticalDisk(Shape):
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
-        surf = gmsh.model.occ.addDisk(self.center.x, self.center.y, self.center.z, self.rx, self.ry)
+        major_radius = max(self.rx, self.ry)
+        minor_radius = min(self.rx, self.ry)
+        x_axis = (1, 0, 0) if self.rx >= self.ry else (0, 1, 0)
+        surf = gmsh.model.occ.addDisk(
+            self.center.x,
+            self.center.y,
+            self.center.z,
+            major_radius,
+            minor_radius,
+            zAxis=(0, 0, 1),
+            xAxis=x_axis,
+        )
         return [(2, surf)]
 
 
