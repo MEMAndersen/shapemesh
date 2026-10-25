@@ -120,6 +120,14 @@ def test_unknown_element_type_skipped(tmp_path):
     assert mesh.num_elements == 0
 
 
+def test_public_arrays_are_read_only(tmp_path):
+    path = tmp_path / "tri.msh"
+    path.write_text(MINIMAL_MSH, encoding="utf-8")
+    mesh = Mesh.read_msh(path)
+    with pytest.raises(ValueError):
+        mesh.nodes.coords[0, 0] = 999.0
+
+
 def test_gmsh_roundtrip(tmp_path):
     gmsh = pytest.importorskip("gmsh")
     gmsh.initialize()

@@ -51,6 +51,13 @@ def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh:
 
         owned = not gmsh.isInitialized()
         if owned:
+            if threading.current_thread() is not threading.main_thread():
+                raise RuntimeError(
+                    "build() must be called from the main thread to initialize Gmsh; "
+                    "initialize Gmsh on the main thread first, or use multiprocessing"
+                )
+            # Keep interruptible=True (the default) so Ctrl-C stops meshing
+            # gracefully; this is also why initialization needs the main thread.
             gmsh.initialize()
         added = False
         try:

@@ -537,6 +537,7 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 - A process-wide `threading.RLock` wraps the entire build, not just `initialize`/`finalize`.
 - `gmsh.isInitialized()` is checked before initialization.
 - `shapemesh` finalizes Gmsh only if it initialized it.
+- `build()` must be called from the main thread to *initialize* Gmsh: Gmsh installs a SIGINT handler (kept so Ctrl-C stops meshing gracefully), which Python only permits on the main thread. Once Gmsh is initialized on the main thread, worker threads may call `build()` (serialized by the lock).
 - A new model is created per build and cleared before release.
 - `gmsh` is imported lazily inside `build()`; importing `shapemesh` does not initialize Gmsh.
 - Builds serialize. Use multiprocessing for parallel meshing.
@@ -578,7 +579,7 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 - MSH4 roundtrip through Gmsh and through `Mesh.read_msh`.
 - Unknown element type tolerance test (reader skips unknown types; writer rejects them).
 - Read-only array test.
-- Concurrent builds serialize.
+- Main-thread-only build guard (worker thread without Gmsh raises a clear error); worker-thread builds with Gmsh pre-initialized serialize.
 - Settings validation and `with_` test.
 - `.msh` re-open roundtrip.
 

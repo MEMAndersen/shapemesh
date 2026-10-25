@@ -68,3 +68,11 @@ def test_roundtrip_through_msh(tmp_path):
     assert reread.num_nodes == mesh.num_nodes
     assert reread.num_elements == mesh.num_elements
     assert reread.physical_group("box", 3).entities == mesh.physical_group("box", 3).entities
+
+
+def test_same_label_and_dimension_merge_into_one_group():
+    a = Cube((0, 0, 0), 1, 1, 1, label="wall")
+    b = Cube((2, 0, 0), 1, 1, 1, label="wall")
+    mesh = build([a, b], MeshSettings())
+    group = mesh.physical_group("wall", 3)
+    assert len(group.entities) == 2
