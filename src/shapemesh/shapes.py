@@ -80,11 +80,15 @@ def _validate_label(label: str | None) -> str | None:
 def _positive_float(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise GeometryError(f"{name} must be a real number, got {type(value).__name__}")
-    if not math.isfinite(value):
+    try:
+        converted = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise GeometryError(f"{name} must be representable as a float, got {value!r}") from exc
+    if not math.isfinite(converted):
         raise GeometryError(f"{name} must be finite, got {value}")
-    if value <= 0:
+    if converted <= 0:
         raise GeometryError(f"{name} must be positive, got {value}")
-    return float(value)
+    return converted
 
 
 def _bbox_diagonal(points: Sequence[Vec3]) -> float:
@@ -160,9 +164,13 @@ class Vec3:
                 raise GeometryError(
                     f"Vec3.{name} must be a real number, got {type(value).__name__}"
                 )
-            if not math.isfinite(value):
+            try:
+                converted = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise GeometryError(f"Vec3.{name} must be representable as a float") from exc
+            if not math.isfinite(converted):
                 raise GeometryError("Vec3 coordinates must be finite")
-            object.__setattr__(self, name, float(value))
+            object.__setattr__(self, name, converted)
 
     @classmethod
     def from_any(cls, value: Vec3Like) -> Vec3:
@@ -777,13 +785,16 @@ def _validate_polyline(points: tuple[Vec3, ...]) -> None:
 def _validate_polygon(points: tuple[Vec3, ...]) -> None:
     if len(points) < 3:
         raise GeometryError("Polygon requires at least 3 points")
-    if len(set(points)) < 3:
+    unique_count = len(set(points))
+    if unique_count < 3:
         raise GeometryError("Polygon requires at least 3 distinct points")
     if points[0] == points[-1]:
         raise GeometryError("Polygon must not repeat the first point as the final point")
     for a, b in pairwise(points):
         if a == b:
             raise GeometryError("Polygon has consecutive identical points")
+    if unique_count != len(points):
+        raise GeometryError("Polygon vertices must be distinct")
     scale = _bbox_diagonal(points)
     normal = _find_polygon_normal(points)
     if normal is None:

@@ -16,6 +16,7 @@
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
 import warnings
+from fractions import Fraction
 
 import numpy as np
 import pytest
@@ -57,6 +58,11 @@ def test_vec3_rejects_non_finite():
         Vec3(float("nan"), 0.0, 0.0)
     with pytest.raises(GeometryError):
         Vec3(0.0, float("inf"), 0.0)
+
+
+def test_vec3_rejects_float_overflow():
+    with pytest.raises(GeometryError):
+        Vec3(10**1000, 0)
 
 
 def test_vec3_rejects_non_numbers():
@@ -161,6 +167,11 @@ def test_polygon_validation():
         Polygon([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)])  # not coplanar
 
 
+def test_polygon_rejects_repeated_nonconsecutive_vertices():
+    with pytest.raises(GeometryError, match="distinct"):
+        Polygon([(0, 0), (1, 0), (0, 1), (1, 0)])
+
+
 def test_rectangle_validation():
     assert Rectangle((0, 0, 0), 1, 2).dimension == 2
     assert Rectangle((0, 0, 1), 1, 2).origin == Vec3(0, 0, 1)  # any z is allowed
@@ -170,11 +181,22 @@ def test_rectangle_validation():
 
 def test_curve_primitives():
     assert Circle((0, 0, 0), 1).dimension == 1
+    assert Circle((0, 0), Fraction(1, 2)).radius == 0.5
     assert Ellipse((0, 0, 0), 2, 1).dimension == 1
     with pytest.raises(GeometryError):
         Circle((0, 0, 0), 0)
     with pytest.raises(GeometryError):
         Ellipse((0, 0, 0), 1, -1)
+
+
+@pytest.mark.parametrize(
+    "radius",
+    [Fraction(1, 10**400), 10**1000],
+    ids=["underflow", "overflow"],
+)
+def test_positive_shape_dimensions_validate_converted_float(radius):
+    with pytest.raises(GeometryError):
+        Circle((0, 0), radius)
 
 
 def test_disk_primitives():

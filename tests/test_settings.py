@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
+from fractions import Fraction
+
 import pytest
 
 from shapemesh import Algorithm2D, Algorithm3D, MeshSettings
@@ -32,10 +34,21 @@ def test_defaults():
 
 def test_element_size_validation():
     assert MeshSettings(element_size=0.5).element_size == 0.5
+    assert MeshSettings(element_size=Fraction(1, 2)).element_size == 0.5
     with pytest.raises(ValueError):
         MeshSettings(element_size=0)
     with pytest.raises(ValueError):
         MeshSettings(element_size=-1)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [Fraction(1, 10**400), 10**1000],
+    ids=["underflow", "overflow"],
+)
+def test_element_size_validates_converted_float(value):
+    with pytest.raises(ValueError):
+        MeshSettings(element_size=value)
 
 
 def test_order_validation():

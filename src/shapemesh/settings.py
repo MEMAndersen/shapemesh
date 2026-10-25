@@ -60,11 +60,15 @@ class Algorithm3D(IntEnum):
 def _positive_float(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise ValueError(f"{name} must be a real number, got {type(value).__name__}")
-    if not math.isfinite(value):
+    try:
+        converted = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be representable as a float, got {value!r}") from exc
+    if not math.isfinite(converted):
         raise ValueError(f"{name} must be finite, got {value}")
-    if value <= 0:
+    if converted <= 0:
         raise ValueError(f"{name} must be positive, got {value}")
-    return float(value)
+    return converted
 
 
 def _validate_advanced(

@@ -564,7 +564,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Polyline | ≥2 points; consecutive points distinct; closed iff first == last; closed form needs ≥3 distinct points |
 | Circle | Radius > 0 |
 | Ellipse | `rx > 0`, `ry > 0` |
-| Polygon | ≥3 distinct points; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
+| Polygon | ≥3 points; all vertices distinct; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
 | Rectangle | `dx > 0`, `dy > 0` |
 | Disk | Radius > 0 |
 | EllipticalDisk | `rx > 0`, `ry > 0` |

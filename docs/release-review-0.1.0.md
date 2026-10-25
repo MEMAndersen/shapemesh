@@ -120,7 +120,8 @@ optimization succeeds. Skip high-order optimization for a 0D model.
 
 ### M5. Numeric validation occurs before float conversion
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/shapes.py:80-87`, `:156-165`;
 `src/shapemesh/settings.py:60-67`
 
@@ -131,7 +132,8 @@ validate finiteness and positivity on the converted value.
 
 ### M6. Repeated non-consecutive polygon vertices bypass validation
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/shapes.py:452-455`, `:757-766`
 
 `Polygon([(0,0), (1,0), (0,1), (1,0)])` is accepted despite the distinct-vertex
@@ -385,4 +387,12 @@ classes, functions, methods, and properties against `AGENTS.md`.
 - 2026-10-25: Fixed M4 by skipping high-order optimization for 0D models and
   added a point-only order-2 regression. Updated the design and threading docs.
   M2-M4 verification: 80 tests passed, Ruff lint and formatting passed, and
+  Pyright reported 0 errors.
+- 2026-10-25: Fixed M5 by converting numeric inputs to float before finiteness
+  and positivity checks, translating conversion failures to `GeometryError` or
+  `ValueError` as appropriate. Added underflow and overflow regressions and
+  verified that ordinary `Fraction` inputs remain valid.
+- 2026-10-25: Fixed M6 by requiring every polygon vertex to be distinct and
+  added a repeated non-consecutive-vertex regression. Clarified the design rule.
+  M5-M6 verification: 86 tests passed, Ruff lint and formatting passed, and
   Pyright reported 0 errors.
