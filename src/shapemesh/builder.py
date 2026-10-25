@@ -50,7 +50,9 @@ __all__ = ["build"]
 
 _LOCK = threading.RLock()
 
-_RESERVED_OPTIONS = frozenset({"Mesh.Algorithm", "Mesh.Algorithm3D"})
+_RESERVED_OPTIONS = frozenset(
+    {"General.Terminal", "Mesh.Algorithm", "Mesh.Algorithm3D", "Mesh.ElementOrder"}
+)
 
 
 def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh:
@@ -91,7 +93,10 @@ def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh:
             # gracefully; this is also why initialization needs the main thread.
             gmsh.initialize()
         added = False
+        saved_options: list[tuple[str, float | int | str]] = []
         try:
+            if not owned:
+                saved_options = _snapshot_options(gmsh, settings)
             gmsh.model.add("shapemesh")
             added = True
             _apply_settings(gmsh, settings)
@@ -105,6 +110,8 @@ def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh:
                 gmsh.model.remove()
             if owned:
                 gmsh.finalize()
+            else:
+                _restore_options(gmsh, saved_options)
 
 
 def _normalize_shapes(shapes: Shape | Sequence[Shape]) -> list[Shape]:
@@ -129,17 +136,43 @@ def _validate_settings(settings: MeshSettings) -> None:
             raise ValueError(f"advanced option {name!r} conflicts with an explicit setting")
 
 
-def _apply_settings(gmsh: Any, settings: MeshSettings) -> None:
-    gmsh.option.setNumber(
-        "General.Terminal",
-        GMSH_TERMINAL_VERBOSE if settings.verbose else GMSH_TERMINAL_SILENT,
-    )
-    gmsh.option.setNumber("Mesh.ElementOrder", settings.order)
+def _configured_options(settings: MeshSettings) -> list[tuple[str, float | int | str]]:
+    options: list[tuple[str, float | int | str]] = [
+        (
+            "General.Terminal",
+            GMSH_TERMINAL_VERBOSE if settings.verbose else GMSH_TERMINAL_SILENT,
+        ),
+        ("Mesh.ElementOrder", settings.order),
+    ]
     if settings.algorithm_2d is not None:
-        gmsh.option.setNumber("Mesh.Algorithm", int(settings.algorithm_2d))
+        options.append(("Mesh.Algorithm", int(settings.algorithm_2d)))
     if settings.algorithm_3d is not None:
-        gmsh.option.setNumber("Mesh.Algorithm3D", int(settings.algorithm_3d))
-    for name, value in settings.advanced:
+        options.append(("Mesh.Algorithm3D", int(settings.algorithm_3d)))
+    options.extend(settings.advanced)
+    return options
+
+
+def _apply_settings(gmsh: Any, settings: MeshSettings) -> None:
+    for name, value in _configured_options(settings):
+        if isinstance(value, str):
+            gmsh.option.setString(name, value)
+        else:
+            gmsh.option.setNumber(name, value)
+
+
+def _snapshot_options(gmsh: Any, settings: MeshSettings) -> list[tuple[str, float | int | str]]:
+    saved: list[tuple[str, float | int | str]] = []
+    for name, value in _configured_options(settings):
+        if isinstance(value, str):
+            previous = gmsh.option.getString(name)
+        else:
+            previous = gmsh.option.getNumber(name)
+        saved.append((name, previous))
+    return saved
+
+
+def _restore_options(gmsh: Any, options: list[tuple[str, float | int | str]]) -> None:
+    for name, value in options:
         if isinstance(value, str):
             gmsh.option.setString(name, value)
         else:
@@ -176,7 +209,7 @@ def _build_mesh(gmsh: Any, shapes: Sequence[Shape], settings: MeshSettings) -> M
     if settings.element_size is not None:
         gmsh.model.mesh.setSize(gmsh.model.getEntities(0), settings.element_size)
     gmsh.model.mesh.generate(max(dim, 1))
-    if settings.optimize:
+    if settings.optimize and not (dim == 0 and settings.order > 1):
         gmsh.model.mesh.optimize("" if settings.order == 1 else "HighOrder")
     return _read_mesh(gmsh, groups)
 

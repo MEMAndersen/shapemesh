@@ -18,12 +18,16 @@
 import pytest
 
 from shapemesh import (
+    Algorithm2D,
+    Algorithm3D,
     Box,
+    Disk,
     ElementType,
     GeometryError,
     Intersection,
     Mesh,
     MeshSettings,
+    Point,
     Union,
     build,
 )
@@ -75,6 +79,74 @@ def test_order_controls_generated_element_types():
         ElementType.TRI10,
         ElementType.TET20,
     }
+
+
+def test_preinitialized_gmsh_options_are_restored():
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 1)
+        numeric_options = {
+            name: gmsh.option.getNumber(name)
+            for name in (
+                "General.Terminal",
+                "Mesh.Algorithm",
+                "Mesh.Algorithm3D",
+                "Mesh.ElementOrder",
+                "Mesh.MinimumCirclePoints",
+            )
+        }
+        socket_name = gmsh.option.getString("Solver.SocketName")
+
+        def assert_options_restored():
+            for name, value in numeric_options.items():
+                assert gmsh.option.getNumber(name) == value
+            assert gmsh.option.getString("Solver.SocketName") == socket_name
+
+        settings = MeshSettings(
+            element_size=0.3,
+            order=2,
+            optimize=False,
+            algorithm_2d=Algorithm2D.DELAUNAY,
+            algorithm_3d=Algorithm3D.HXT,
+            advanced=(
+                ("Mesh.MinimumCirclePoints", 12),
+                ("Solver.SocketName", "shapemesh-option-test"),
+            ),
+        )
+        build(Disk((0, 0), 1), settings)
+        assert_options_restored()
+
+        build(Disk((0, 0), 1), MeshSettings(element_size=0.3, optimize=False))
+        assert_options_restored()
+
+        disjoint = Intersection(Box((0, 0, 0), 1, 1, 1), Box((5, 5, 5), 1, 1, 1))
+        with pytest.raises(GeometryError):
+            build(disjoint, settings)
+        assert_options_restored()
+    finally:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.finalize()
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["General.Terminal", "Mesh.Algorithm", "Mesh.Algorithm3D", "Mesh.ElementOrder"],
+)
+def test_advanced_options_cannot_override_explicit_settings(name):
+    settings = MeshSettings(advanced=((name, 1),))
+
+    with pytest.raises(ValueError, match="conflicts with an explicit setting"):
+        build(Box((0, 0, 0), 1, 1, 1), settings)
+
+
+def test_point_only_high_order_meshing():
+    mesh = build(Point((0, 0)), MeshSettings(order=2))
+
+    assert mesh.num_nodes == 1
+    assert mesh.num_elements == 1
+    assert mesh.metadata.dim == 0
 
 
 def test_boolean_union():

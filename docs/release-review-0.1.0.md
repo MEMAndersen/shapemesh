@@ -86,7 +86,8 @@ x/y extents. Do not merely add an `rx >= ry` restriction.
 
 ### M2. Gmsh options leak between builds
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/builder.py:95-98`, `:132-145`
 
 Gmsh options are process-global. In a preinitialized session, a build using
@@ -98,7 +99,8 @@ introduced by the H1 fix.
 
 ### M3. `advanced` can override explicit settings
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/builder.py:53`, `:126-145`
 
 Only the two algorithm options are reserved. `Mesh.ElementOrder` conflicts with
@@ -108,7 +110,8 @@ touching Gmsh.
 
 ### M4. Point-only high-order builds fail with default optimization
 
-**Status:** Open  
+**Status:** Fixed
+
 **Reference:** `src/shapemesh/builder.py:174-180`
 
 `build(Point((0, 0)), MeshSettings(order=2))` raises
@@ -374,3 +377,12 @@ classes, functions, methods, and properties against `AGENTS.md`.
   selecting a y major axis when `ry > rx`. Added curve and disk regressions with
   a nonzero center that verify the resulting x/y/z bounding extents. Verification:
   74 tests passed, Ruff lint and formatting passed, and Pyright reported 0 errors.
+- 2026-10-25: Fixed M2 by centralizing configured Gmsh options and restoring them
+  in preinitialized sessions after successful and failed builds. Added numeric and
+  string option regressions, including a subsequent default build.
+- 2026-10-25: Fixed M3 by reserving `General.Terminal` and `Mesh.ElementOrder` in
+  addition to the algorithm options; added conflict tests for all four keys.
+- 2026-10-25: Fixed M4 by skipping high-order optimization for 0D models and
+  added a point-only order-2 regression. Updated the design and threading docs.
+  M2-M4 verification: 80 tests passed, Ruff lint and formatting passed, and
+  Pyright reported 0 errors.

@@ -525,7 +525,8 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - `order` is `1..5`; applied via `gmsh.option.setNumber("Mesh.ElementOrder", order)`
   before `generate`, which is given the model dimension. Setting the option before
   generation is required; `gmsh.model.mesh.setOrder` only changes an existing mesh.
-- `optimize=True` calls `optimize("")` for linear meshes and `optimize("HighOrder")` for order > 1.
+- `optimize=True` calls `optimize("")` for linear meshes and `optimize("HighOrder")`
+  for order > 1. High-order optimization is skipped for 0D models.
 - `verbose=True` restores Gmsh terminal output, which is silenced by default.
 - `algorithm_2d` maps to `Mesh.Algorithm`; `algorithm_3d` maps to `Mesh.Algorithm3D`.
 - `advanced` is a tuple of `(option_name, value)` pairs applied after explicit fields. Integer/float values use `gmsh.option.setNumber`; strings use `setString`. Keys that conflict with explicit fields are rejected.
@@ -545,6 +546,8 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - A process-wide `threading.RLock` wraps the entire build, not just `initialize`/`finalize`.
 - `gmsh.isInitialized()` is checked before initialization.
 - `shapemesh` finalizes Gmsh only if it initialized it.
+- When a build uses an existing Gmsh session, every global option it touches is
+  restored during cleanup, including after failures.
 - `build()` must be called from the main thread to *initialize* Gmsh: Gmsh installs a SIGINT handler (kept so Ctrl-C stops meshing gracefully), which Python only permits on the main thread. Once Gmsh is initialized on the main thread, worker threads may call `build()` (serialized by the lock).
 - A new model is created per build and cleared before release.
 - `gmsh` is imported lazily inside `build()`; importing `shapemesh` does not initialize Gmsh.

@@ -23,4 +23,6 @@ own main thread and its own Gmsh session.
 - Gmsh is imported lazily inside `build()`; importing `shapemesh` does not
   initialize Gmsh.
 - `shapemesh` finalizes Gmsh only if it initialized it.
+- When a build uses an existing Gmsh session, every global option touched by the
+  build is restored during cleanup, including after failures.
 - A new model is created per build and removed before release.
