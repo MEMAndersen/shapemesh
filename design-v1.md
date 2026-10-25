@@ -45,7 +45,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 | Area | Decision | Reason |
 |---|---|---|
 | Name | `shapemesh` | Matches repo; PyPI name free as of 2026-10-24 |
-| License | LGPL-2.1-or-later | Copyleft on the library itself without blocking non-GPL downstream users |
+| License | LGPL-3.0-or-later | Copyleft on the library itself without blocking non-GPL downstream users |
 | Python | `>=3.12` | Modern typing and dataclasses |
 | Shapes | Frozen dataclasses | Positional geometry, keyword-only label; `kw_only=True` also dodges the default-ordering error |
 | Point | 0D shape plus `Vec3` coordinate type | Gmsh 0D entities contain type-15 point elements; avoids label leakage |
@@ -593,8 +593,8 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 - Python: `>=3.12`.
 - Runtime dependencies: `numpy`, `gmsh>=4.15`.
 - Dev dependencies: pytest, ruff, pyright.
-- License: LGPL-2.1-or-later, with Gmsh attribution in the README.
-- CI matrix: Python 3.12/3.13 on Linux, macOS, Windows; Gmsh 4.15.2.
+- License: LGPL-3.0-or-later, with Gmsh attribution in the README.
+- CI matrix: Python 3.12–3.15 on Linux, macOS, Windows; Gmsh 4.15.2 (set up after the feature branch is squash-merged).
 - Gmsh policy: tested with 4.15.2; newer 4.x allowed. New element types require a `shapemesh` update.
 - Version: `0.1.0`.
 

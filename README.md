@@ -3,7 +3,7 @@
 A Gmsh-powered geometry and meshing library: a closed set of 0–3D shapes,
 n-ary booleans, and entity-level MSH 4.1 I/O.
 
-> **Status:** design locked, not yet implemented.
+> **Status:** v0.1.0 in development.
 
 ## Features
 
@@ -20,8 +20,24 @@ pip install shapemesh
 
 ## Quick start
 
-<!-- TODO: add once the public API is implemented. -->
+```python
+from shapemesh import Cube, MeshSettings, build
+
+mesh = build(Cube((0, 0, 0), 1, 1, 1, label="column"), MeshSettings())
+mesh.write_msh("column.msh")
+```
+
+## Examples
+
+Structural examples (1D, 2D, and 3D) live in [`examples/`](examples/) — coming
+soon.
+
+## Documentation
+
+- [Labels and physical groups](docs/labels.md)
+- [Thread safety](docs/threading.md)
+- [Gmsh version policy](docs/version-policy.md)
 
 ## License
 
-LGPL-2.1-or-later. Gmsh — a runtime dependency — is GPLv2-or-later.
+LGPL-3.0-or-later. Gmsh — a runtime dependency — is GPLv2-or-later.
