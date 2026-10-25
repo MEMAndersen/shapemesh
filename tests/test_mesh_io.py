@@ -100,6 +100,27 @@ def test_read_minimal(tmp_path):
     assert blocks[0].connectivity.tolist() == [[1, 2, 3]]
 
 
+def test_repr_summaries(tmp_path):
+    path = tmp_path / "tri.msh"
+    path.write_text(MINIMAL_MSH, encoding="utf-8")
+    mesh = Mesh.read_msh(path)
+
+    assert repr(mesh) == "Mesh(dim=2, nodes=3, elements=1, groups=1, bbox=(0, 0, 0, 1, 1, 0))"
+    assert repr(mesh.nodes) == "NodeTable(nodes=3)"
+    assert repr(mesh.physical_group("tri", 2)) == (
+        "PhysicalGroup(name='tri', dim=2, tag=1, entities=1)"
+    )
+    assert repr(mesh.element_blocks[0]) == "ElementBlock(entity=(2, 1), type=TRI3, elements=1)"
+    assert repr(mesh.entities()[0]) == "EntityRecord(dim=0, tag=1)"
+    assert repr(mesh.metadata).startswith("MeshMetadata(dim=2, msh_version='4.1', ")
+
+    numpy_mesh = mesh.to_numpy()
+    assert repr(numpy_mesh) == "NumpyMesh(nodes=3, blocks=[TRI3])"
+    assert repr(numpy_mesh.blocks[ElementType.TRI3]) == (
+        "NumpyElementBlock(elements=1, nodes_per_element=3)"
+    )
+
+
 def test_roundtrip(tmp_path):
     path = tmp_path / "tri.msh"
     path.write_text(MINIMAL_MSH, encoding="utf-8")

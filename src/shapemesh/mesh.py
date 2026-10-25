@@ -172,6 +172,9 @@ class EntityRecord:
     bbox: tuple[float, float, float, float, float, float]
     boundary: tuple[tuple[int, int], ...] = ()
 
+    def __repr__(self) -> str:
+        return f"EntityRecord(dim={self.dim}, tag={self.tag})"
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NodeTable:
@@ -188,6 +191,9 @@ class NodeTable:
     coords: np.ndarray  # (N, 3) float
     entity_dim: np.ndarray | None = None  # (N,) int, -1 if unknown
     entity_tag: np.ndarray | None = None
+
+    def __repr__(self) -> str:
+        return f"NodeTable(nodes={int(self.tags.shape[0])})"
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -208,6 +214,12 @@ class ElementBlock:
     tags: np.ndarray  # (M,) int
     connectivity: np.ndarray  # (M, k) int, global node tags
 
+    def __repr__(self) -> str:
+        return (
+            f"ElementBlock(entity=({self.entity_dim}, {self.entity_tag}), "
+            f"type={self.type.name}, elements={int(self.tags.shape[0])})"
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class PhysicalGroup:
@@ -224,6 +236,12 @@ class PhysicalGroup:
     dim: int
     tag: int
     entities: tuple[tuple[int, int], ...]
+
+    def __repr__(self) -> str:
+        return (
+            f"PhysicalGroup(name={self.name!r}, dim={self.dim}, "
+            f"tag={self.tag}, entities={len(self.entities)})"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,6 +260,12 @@ class MeshMetadata:
     gmsh_version: str | None = None
     source: str | None = None
 
+    def __repr__(self) -> str:
+        return (
+            f"MeshMetadata(dim={self.dim}, msh_version={self.msh_version!r}, "
+            f"gmsh_version={self.gmsh_version!r}, source={self.source!r})"
+        )
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NumpyElementBlock:
@@ -255,6 +279,12 @@ class NumpyElementBlock:
     connectivity: np.ndarray  # (M, k) int, 0-based indices into coords
     node_tags: np.ndarray  # (M, k) int, original Gmsh tags
 
+    def __repr__(self) -> str:
+        return (
+            f"NumpyElementBlock(elements={int(self.connectivity.shape[0])}, "
+            f"nodes_per_element={int(self.connectivity.shape[1])})"
+        )
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NumpyMesh:
@@ -267,6 +297,10 @@ class NumpyMesh:
 
     coords: np.ndarray  # (N, 3) float, global
     blocks: dict[ElementType, NumpyElementBlock]
+
+    def __repr__(self) -> str:
+        types = ", ".join(t.name for t in self.blocks)
+        return f"NumpyMesh(nodes={int(self.coords.shape[0])}, blocks=[{types}])"
 
 
 # -- helpers ---------------------------------------------------------------
@@ -557,6 +591,14 @@ class Mesh:
         self._entities = entities
         self._groups = groups
         self._metadata = metadata
+
+    def __repr__(self) -> str:
+        x0, y0, z0, x1, y1, z1 = self.bbox
+        return (
+            f"Mesh(dim={self.metadata.dim}, nodes={self.num_nodes}, "
+            f"elements={self.num_elements}, groups={len(self.groups)}, "
+            f"bbox=({x0:g}, {y0:g}, {z0:g}, {x1:g}, {y1:g}, {z1:g}))"
+        )
 
     # -- properties --------------------------------------------------------
 
