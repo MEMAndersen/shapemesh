@@ -9,6 +9,15 @@ from .errors import (
     MeshFormatError,
     ShapeMeshError,
 )
+from .mesh import (
+    ElementBlock,
+    ElementType,
+    EntityRecord,
+    Mesh,
+    MeshMetadata,
+    NodeTable,
+    PhysicalGroup,
+)
 from .settings import Algorithm2D, Algorithm3D, MeshSettings
 from .shapes import (
     Cube,
@@ -36,12 +45,19 @@ __all__ = [
     "Cube",
     "Cylinder",
     "Difference",
+    "ElementBlock",
+    "ElementType",
+    "EntityRecord",
     "GeometryError",
     "Intersection",
     "LabelError",
     "Line",
+    "Mesh",
     "MeshFormatError",
+    "MeshMetadata",
     "MeshSettings",
+    "NodeTable",
+    "PhysicalGroup",
     "Point",
     "Polygon",
     "Polyline",
