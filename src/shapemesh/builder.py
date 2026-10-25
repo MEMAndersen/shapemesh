@@ -50,7 +50,7 @@ __all__ = ["build"]
 
 _LOCK = threading.RLock()
 
-_RESERVED_OPTIONS = frozenset({"Mesh.MeshSizeMax", "Mesh.Algorithm", "Mesh.Algorithm3D"})
+_RESERVED_OPTIONS = frozenset({"Mesh.Algorithm", "Mesh.Algorithm3D"})
 
 
 def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh:
@@ -134,8 +134,6 @@ def _apply_settings(gmsh: Any, settings: MeshSettings) -> None:
         "General.Terminal",
         GMSH_TERMINAL_VERBOSE if settings.verbose else GMSH_TERMINAL_SILENT,
     )
-    if settings.characteristic_length is not None:
-        gmsh.option.setNumber("Mesh.MeshSizeMax", settings.characteristic_length)
     if settings.algorithm_2d is not None:
         gmsh.option.setNumber("Mesh.Algorithm", int(settings.algorithm_2d))
     if settings.algorithm_3d is not None:
@@ -174,6 +172,8 @@ def _build_mesh(gmsh: Any, shapes: Sequence[Shape], settings: MeshSettings) -> M
 
     groups = _add_groups(gmsh, label_map)
     dim = gmsh.model.getDimension()
+    if settings.characteristic_length is not None:
+        gmsh.model.mesh.setSize(gmsh.model.getEntities(0), settings.characteristic_length)
     gmsh.model.mesh.setOrder(settings.order)
     gmsh.model.mesh.generate(max(dim, 1))
     if settings.optimize:

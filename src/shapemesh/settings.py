@@ -89,8 +89,8 @@ class MeshSettings:
     """Validated settings applied to the Gmsh model before meshing.
 
     Args:
-        characteristic_length: Maximum element size (``Mesh.MeshSizeMax``), or
-            ``None`` to use Gmsh's default.
+        characteristic_length: Target mesh size, set at every model point
+            before meshing; ``None`` uses Gmsh's default.
         order: Element order, ``1`` to ``5``.
         optimize: Whether to run mesh optimization after generation.
         verbose: Whether to show Gmsh's terminal output (silent by default).
@@ -102,7 +102,7 @@ class MeshSettings:
         ValueError: If any field fails validation.
     """
 
-    characteristic_length: float | None = None  # Mesh.MeshSizeMax
+    characteristic_length: float | None = None  # target size at every point
     order: int = 1  # 1..5
     optimize: bool = True
     verbose: bool = False

@@ -56,6 +56,12 @@ def test_build_single_shape_is_normalized():
     assert mesh.num_elements > 0
 
 
+def test_characteristic_length_controls_mesh_size():
+    coarse = build(Box((0, 0, 0), 1, 1, 1), MeshSettings(characteristic_length=1.0))
+    fine = build(Box((0, 0, 0), 1, 1, 1), MeshSettings(characteristic_length=0.25))
+    assert fine.num_elements > coarse.num_elements
+
+
 def test_boolean_union():
     a = Box((0, 0, 0), 1, 1, 1)
     b = Box((0.5, 0, 0), 1, 1, 1)
