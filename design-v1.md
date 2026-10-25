@@ -125,7 +125,7 @@ Rules:
 - `label` is keyword-only, non-empty, stripped, at most 127 characters (a defensive cap; MSH 4.1 imposes no such limit), and must not contain quotes or newlines.
 - Shapes are frozen and hashable.
 - `a | b`, `a & b`, and `a - b` desugar to binary `Union`, `Intersection`, and `Difference`.
-- N-ary booleans use the explicit classes.
+- N-ary booleans use the explicit classes, accepting either variadic shapes or a single sequence (`Union(a, b, c)` or `Union([a, b, c])`).
 - Booleans require at least two operands of the same topological dimension.
 - An empty boolean result raises `GeometryError`.
 - `Difference(a, b, c)` means `a - (b ∪ c)`.

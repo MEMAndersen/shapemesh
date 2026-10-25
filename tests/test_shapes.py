@@ -212,6 +212,15 @@ def test_boolean_construction_and_dimension():
     assert isinstance(a - b, Difference)
 
 
+def test_boolean_accepts_sequence():
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0, 0), 1, 1, 1)
+    c = Box((2, 0, 0), 1, 1, 1)
+    assert Union([a, b, c]).operands == (a, b, c)
+    assert Intersection([a, b]).operands == (a, b)
+    assert Difference([a, b]).operands == (a, b)
+
+
 def test_boolean_validation_errors():
     a = Box((0, 0, 0), 1, 1, 1)
     with pytest.raises(GeometryError):

@@ -32,7 +32,7 @@ import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -797,15 +797,32 @@ def _find_polygon_normal(points: tuple[Vec3, ...]) -> Vec3 | None:
 # -- booleans --------------------------------------------------------------
 
 
+def _coerce_operands(
+    operands: tuple[Shape | Sequence[Shape], ...],
+) -> tuple[Shape, ...]:
+    """Flatten a single-sequence boolean argument into individual operands.
+
+    Booleans accept either variadic shapes (``Difference(a, b)``) or a single
+    sequence (``Difference([a, b])``).
+    """
+    if len(operands) == 1:
+        single = operands[0]
+        if isinstance(single, (str, bytes)):
+            raise GeometryError("boolean operands must be Shape instances or a sequence of Shape")
+        if isinstance(single, Sequence):
+            return tuple(single)
+    return cast(tuple[Shape, ...], operands)
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class _Boolean(Shape):
     """Base class for the n-ary boolean operations."""
 
     operands: tuple[Shape, ...]
 
-    def __init__(self, *operands: Shape, label: str | None = None) -> None:
+    def __init__(self, *operands: Shape | Sequence[Shape], label: str | None = None) -> None:
         object.__setattr__(self, "label", label)
-        object.__setattr__(self, "operands", operands)
+        object.__setattr__(self, "operands", _coerce_operands(operands))
         self.__post_init__()
 
     @property
@@ -830,7 +847,8 @@ class Union(_Boolean):
     n-ary form equals nested binary unions.
 
     Args:
-        operands: Two or more same-dimension shapes to unite.
+        operands: Two or more same-dimension shapes to unite, or a single
+            sequence of them.
         label: An optional physical-group name.
 
     Raises:
@@ -860,7 +878,8 @@ class Intersection(_Boolean):
     cannot be expressed in a single Gmsh call.
 
     Args:
-        operands: Two or more same-dimension shapes to intersect.
+        operands: Two or more same-dimension shapes to intersect, or a single
+            sequence of them.
         label: An optional physical-group name.
 
     Raises:
@@ -887,7 +906,7 @@ class Difference(_Boolean):
 
     Args:
         operands: The shape to subtract from, followed by one or more shapes
-            to subtract.
+            to subtract; may also be a single sequence of shapes.
         label: An optional physical-group name.
 
     Raises:
