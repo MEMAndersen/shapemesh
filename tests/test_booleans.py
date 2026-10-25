@@ -61,7 +61,7 @@ def test_difference_of_overlapping_boxes():
 def test_box_minus_sphere_volume():
     box = Box((0, 0, 0), 1, 1, 1)
     sphere = Sphere((0.5, 0.5, 0.5), 0.2)
-    mesh = build(Difference(box, sphere), MeshSettings(characteristic_length=0.05))
+    mesh = build(Difference(box, sphere), MeshSettings(element_size=0.05))
     assert _volume(mesh) == pytest.approx(0.966, abs=0.02)
 
 

@@ -89,8 +89,9 @@ class MeshSettings:
     """Validated settings applied to the Gmsh model before meshing.
 
     Args:
-        characteristic_length: Target mesh size, set at every model point
-            before meshing; ``None`` uses Gmsh's default.
+        element_size: Target element size (Gmsh's "characteristic length"),
+            set at every model point before meshing; ``None`` uses Gmsh's
+            default.
         order: Element order, ``1`` to ``5``.
         optimize: Whether to run mesh optimization after generation.
         verbose: Whether to show Gmsh's terminal output (silent by default).
@@ -102,7 +103,7 @@ class MeshSettings:
         ValueError: If any field fails validation.
     """
 
-    characteristic_length: float | None = None  # target size at every point
+    element_size: float | None = None  # Gmsh "characteristic length" at every point
     order: int = 1  # 1..5
     optimize: bool = True
     verbose: bool = False
@@ -111,11 +112,11 @@ class MeshSettings:
     advanced: tuple[tuple[str, float | int | str], ...] = ()
 
     def __post_init__(self) -> None:
-        if self.characteristic_length is not None:
+        if self.element_size is not None:
             object.__setattr__(
                 self,
-                "characteristic_length",
-                _positive_float(self.characteristic_length, "characteristic_length"),
+                "element_size",
+                _positive_float(self.element_size, "element_size"),
             )
         if isinstance(self.order, bool) or not isinstance(self.order, int):
             raise ValueError(f"order must be an int in 1..5, got {type(self.order).__name__}")

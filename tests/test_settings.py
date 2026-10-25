@@ -22,7 +22,7 @@ from shapemesh import Algorithm2D, Algorithm3D, MeshSettings
 
 def test_defaults():
     s = MeshSettings()
-    assert s.characteristic_length is None
+    assert s.element_size is None
     assert s.order == 1
     assert s.optimize is True
     assert s.algorithm_2d is None
@@ -30,12 +30,12 @@ def test_defaults():
     assert s.advanced == ()
 
 
-def test_characteristic_length_validation():
-    assert MeshSettings(characteristic_length=0.5).characteristic_length == 0.5
+def test_element_size_validation():
+    assert MeshSettings(element_size=0.5).element_size == 0.5
     with pytest.raises(ValueError):
-        MeshSettings(characteristic_length=0)
+        MeshSettings(element_size=0)
     with pytest.raises(ValueError):
-        MeshSettings(characteristic_length=-1)
+        MeshSettings(element_size=-1)
 
 
 def test_order_validation():

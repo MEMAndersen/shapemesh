@@ -363,7 +363,7 @@ The table includes the higher-order fixed-node types (e.g. 92 = Hexahedron 64, 9
 ```python
 @dataclass(frozen=True, slots=True)
 class MeshSettings:
-    characteristic_length: float | None = None   # per-point size (mesh.setSize)
+    element_size: float | None = None   # per-point size (mesh.setSize)
     order: int = 1                                # 1..5
     optimize: bool = True
     verbose: bool = False  # show Gmsh terminal output (silenced by default)
@@ -521,7 +521,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 
 ## 10. Settings semantics
 
-- `characteristic_length` sets the target mesh size at every model point via `gmsh.model.mesh.setSize` before meshing. `h` must be positive.
+- `element_size` sets the target mesh size at every model point via `gmsh.model.mesh.setSize` before meshing. `h` must be positive.
 - `order` is `1..5`; applied via `gmsh.model.mesh.setOrder(order)` (the element order), while `generate` is given the model dimension.
 - `optimize=True` calls `optimize("")` for linear meshes and `optimize("HighOrder")` for order > 1.
 - `verbose=True` restores Gmsh terminal output, which is silenced by default.
