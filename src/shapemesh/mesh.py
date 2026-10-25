@@ -460,7 +460,9 @@ def _parse_nodes(body: list[str]) -> NodeTable:
     for _ in range(n_blocks):
         dim = _read_int(it)
         tag = _read_int(it)
-        _read_int(it)  # parametric (always 0 in 4.1)
+        parametric = _read_int(it)
+        if parametric:
+            raise MeshFormatError("parametric $Nodes blocks are not supported")
         n = _read_int(it)
         block_tags = [_read_int(it) for _ in range(n)]
         block_coords = [[_read_float(it) for _ in range(3)] for _ in range(n)]

@@ -17,7 +17,7 @@
 
 import pytest
 
-from shapemesh import ElementType, Mesh
+from shapemesh import ElementType, Mesh, MeshFormatError
 
 MINIMAL_MSH = """\
 $MeshFormat
@@ -78,6 +78,29 @@ $Elements
 0 1 999 2
 1 1 2 3
 2 4 1 2
+$EndElements
+"""
+
+PARAMETRIC_NODES_MSH = """\
+$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Entities
+0 1 0 0
+1 0 0 0 1 0 0 0 0
+$EndEntities
+$Nodes
+1 2 1 2
+1 1 1 2
+1
+2
+0 0 0 0.25
+1 0 0 0.75
+$EndNodes
+$Elements
+1 1 1 1
+1 1 1 1
+1 1 2
 $EndElements
 """
 
@@ -156,6 +179,14 @@ def test_unknown_element_type_skipped(tmp_path):
         mesh = Mesh.read_msh(path)
     assert mesh.num_nodes == 4
     assert mesh.num_elements == 0
+
+
+def test_parametric_nodes_rejected(tmp_path):
+    path = tmp_path / "parametric.msh"
+    path.write_text(PARAMETRIC_NODES_MSH, encoding="utf-8")
+
+    with pytest.raises(MeshFormatError, match="parametric"):
+        Mesh.read_msh(path)
 
 
 def test_public_arrays_are_read_only(tmp_path):

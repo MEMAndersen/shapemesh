@@ -134,6 +134,7 @@ def _apply_settings(gmsh: Any, settings: MeshSettings) -> None:
         "General.Terminal",
         GMSH_TERMINAL_VERBOSE if settings.verbose else GMSH_TERMINAL_SILENT,
     )
+    gmsh.option.setNumber("Mesh.ElementOrder", settings.order)
     if settings.algorithm_2d is not None:
         gmsh.option.setNumber("Mesh.Algorithm", int(settings.algorithm_2d))
     if settings.algorithm_3d is not None:
@@ -174,7 +175,6 @@ def _build_mesh(gmsh: Any, shapes: Sequence[Shape], settings: MeshSettings) -> M
     dim = gmsh.model.getDimension()
     if settings.element_size is not None:
         gmsh.model.mesh.setSize(gmsh.model.getEntities(0), settings.element_size)
-    gmsh.model.mesh.setOrder(settings.order)
     gmsh.model.mesh.generate(max(dim, 1))
     if settings.optimize:
         gmsh.model.mesh.optimize("" if settings.order == 1 else "HighOrder")

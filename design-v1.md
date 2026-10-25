@@ -522,7 +522,9 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 ## 10. Settings semantics
 
 - `element_size` sets the target mesh size at every model point via `gmsh.model.mesh.setSize` before meshing. `h` must be positive.
-- `order` is `1..5`; applied via `gmsh.model.mesh.setOrder(order)` (the element order), while `generate` is given the model dimension.
+- `order` is `1..5`; applied via `gmsh.option.setNumber("Mesh.ElementOrder", order)`
+  before `generate`, which is given the model dimension. Setting the option before
+  generation is required; `gmsh.model.mesh.setOrder` only changes an existing mesh.
 - `optimize=True` calls `optimize("")` for linear meshes and `optimize("HighOrder")` for order > 1.
 - `verbose=True` restores Gmsh terminal output, which is silenced by default.
 - `algorithm_2d` maps to `Mesh.Algorithm`; `algorithm_3d` maps to `Mesh.Algorithm3D`.
