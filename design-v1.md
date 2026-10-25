@@ -37,7 +37,6 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 - Binary MSH
 - Mesh mutation methods
 - Entity/face-level labels
-- Non-XY Rectangle
 - Per-shape size controls
 
 ## 4. Locked decisions
@@ -105,7 +104,7 @@ Point(coord, *, label=None)
 Line(start, end, *, label=None)
 Polyline(points, *, label=None)             # closed iff points[0] == points[-1]
 Polygon(points, *, label=None)              # any plane
-Rectangle(origin, dx, dy, *, label=None)    # z = 0
+Rectangle(origin, dx, dy, *, label=None)    # axis-aligned; any constant z
 Sphere(center, radius, *, label=None)
 Box(origin, dx, dy, dz, *, label=None)
 Cylinder(start, end, radius, *, label=None) # provisional signature; see §17
@@ -552,7 +551,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Line | Start ≠ end |
 | Polyline | ≥2 points; consecutive points distinct; closed iff first == last; closed form needs ≥3 distinct points |
 | Polygon | ≥3 distinct points; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
-| Rectangle | `dx > 0`, `dy > 0`; origin `z = 0` |
+| Rectangle | `dx > 0`, `dy > 0` |
 | Sphere | Radius > 0 |
 | Box | `dx > 0`, `dy > 0`, `dz > 0` |
 | Cylinder | Start ≠ end; radius > 0 |
@@ -614,7 +613,6 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Mesh mutation: filter/renumber
 - Entity/face-level labels
 - Per-shape size controls
-- Non-XY Rectangle
 
 ## 17. Open items and assumptions
 

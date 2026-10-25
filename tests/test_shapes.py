@@ -159,8 +159,7 @@ def test_polygon_validation():
 
 def test_rectangle_validation():
     assert Rectangle((0, 0, 0), 1, 2).dimension == 2
-    with pytest.raises(GeometryError):
-        Rectangle((0, 0, 1), 1, 2)  # z != 0
+    assert Rectangle((0, 0, 1), 1, 2).origin == Vec3(0, 0, 1)  # any z is allowed
     with pytest.raises(GeometryError):
         Rectangle((0, 0, 0), -1, 2)  # dx <= 0
 

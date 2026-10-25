@@ -402,17 +402,16 @@ class Polygon(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Rectangle(Shape):
-    """An axis-aligned rectangle in the ``z = 0`` plane (2-dimensional).
+    """An axis-aligned rectangle in the plane ``z = origin.z`` (2-dimensional).
 
     Args:
-        origin: The lower-left corner (must have ``z = 0``).
+        origin: The lower-left corner.
         dx: The width along ``x`` (positive).
         dy: The height along ``y`` (positive).
         label: An optional physical-group name.
 
     Raises:
-        GeometryError: If ``origin`` is not in the ``z = 0`` plane, or ``dx``
-            or ``dy`` is not positive.
+        GeometryError: If ``dx`` or ``dy`` is not positive.
         LabelError: If ``label`` is invalid.
     """
 
@@ -428,8 +427,6 @@ class Rectangle(Shape):
         self.__post_init__()
 
     def __post_init__(self) -> None:
-        if self.origin.z != 0.0:
-            raise GeometryError("Rectangle origin must lie in the z = 0 plane")
         object.__setattr__(self, "dx", _positive_float(self.dx, "dx"))
         object.__setattr__(self, "dy", _positive_float(self.dy, "dy"))
         Shape.__post_init__(self)
