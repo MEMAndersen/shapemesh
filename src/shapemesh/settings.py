@@ -19,8 +19,7 @@
 
 Settings are a plain frozen dataclass (not a pydantic model): construction
 rejects unknown keyword arguments and does no type coercion, and
-:meth:`MeshSettings.with_` uses :func:`dataclasses.replace` so changes are
-revalidated.
+`MeshSettings.with_` uses ``dataclasses.replace`` so changes are revalidated.
 """
 
 from __future__ import annotations
@@ -87,7 +86,21 @@ def _validate_advanced(
 
 @dataclass(frozen=True, slots=True)
 class MeshSettings:
-    """Validated settings applied to the Gmsh model before meshing."""
+    """Validated settings applied to the Gmsh model before meshing.
+
+    Args:
+        characteristic_length: Maximum element size (``Mesh.MeshSizeMax``), or
+            ``None`` to use Gmsh's default.
+        order: Element order, ``1`` to ``5``.
+        optimize: Whether to run mesh optimization after generation.
+        verbose: Whether to show Gmsh's terminal output (silent by default).
+        algorithm_2d: The 2D meshing algorithm, or ``None`` for Gmsh's default.
+        algorithm_3d: The 3D meshing algorithm, or ``None`` for Gmsh's default.
+        advanced: Extra ``(name, value)`` Gmsh options applied last.
+
+    Raises:
+        ValueError: If any field fails validation.
+    """
 
     characteristic_length: float | None = None  # Mesh.MeshSizeMax
     order: int = 1  # 1..5
@@ -125,4 +138,16 @@ class MeshSettings:
         object.__setattr__(self, "advanced", _validate_advanced(self.advanced))
 
     def with_(self, **changes: object) -> MeshSettings:
+        """Return a copy with the given fields changed.
+
+        Args:
+            **changes: Fields to override.
+
+        Returns:
+            A new `MeshSettings` with ``changes`` applied (revalidated).
+
+        Raises:
+            TypeError: If an unknown field name is given.
+            ValueError: If a changed field fails validation.
+        """
         return replace(self, **changes)

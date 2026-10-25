@@ -13,7 +13,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 
 ## 2. Goals
 
-- Port the core Rust shapes (Point, Line, Polyline, Polygon, Rectangle, Sphere, Cube, Cylinder) and n-ary booleans.
+- Port the core Rust shapes (Point, Line, Polyline, Polygon, Rectangle, Sphere, Box, Cylinder) and n-ary booleans.
 - Validate before touching Gmsh.
 - Keep the mesh entity-classified, matching Gmsh's `.msh` model.
 - Provide deterministic label → physical group semantics.
@@ -107,7 +107,7 @@ Polyline(points, *, label=None)             # closed iff points[0] == points[-1]
 Polygon(points, *, label=None)              # any plane
 Rectangle(origin, dx, dy, *, label=None)    # z = 0
 Sphere(center, radius, *, label=None)
-Cube(origin, dx, dy, dz, *, label=None)
+Box(origin, dx, dy, dz, *, label=None)
 Cylinder(start, end, radius, *, label=None) # provisional signature; see §17
 Union(*operands, *, label=None)
 Intersection(*operands, *, label=None)
@@ -433,7 +433,7 @@ release lock
 | Polygon | points + lines + `occ.addCurveLoop` + `occ.addPlaneSurface` | 2 |
 | Rectangle | `occ.addRectangle` | 2 |
 | Sphere | `occ.addSphere` | 3 |
-| Cube | `occ.addBox` | 3 |
+| Box | `occ.addBox` | 3 |
 | Cylinder | `occ.addCylinder` | 3 |
 
 Notes:
@@ -506,7 +506,7 @@ MSH2.2 elements carry one physical tag. It cannot represent an entity that belon
 
 ### 9.5 Roundtrip test
 
-Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen with `Mesh.read_msh`. Verify:
+Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen with `Mesh.read_msh`. Verify:
 
 - three volume pieces;
 - the intersection piece appears in both groups;
@@ -554,7 +554,7 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 | Polygon | ≥3 distinct points; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
 | Rectangle | `dx > 0`, `dy > 0`; origin `z = 0` |
 | Sphere | Radius > 0 |
-| Cube | `dx > 0`, `dy > 0`, `dz > 0` |
+| Box | `dx > 0`, `dy > 0`, `dz > 0` |
 | Cylinder | Start ≠ end; radius > 0 |
 | Booleans | ≥2 operands; same dimension; non-empty result |
 | Labels | Non-empty, stripped, ≤127 chars, no quotes/newlines |
@@ -566,11 +566,11 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 
 - Port Rust primitives and pipeline tests.
 - Every primitive realizes the correct top-dimensional entity/entities and meshes with its group.
-- Union/intersection/difference on overlapping cubes; volume checks.
-- Cube minus sphere ≈ 0.966.
-- Two overlapping cubes fragment into three conformal pieces.
+- Union/intersection/difference on overlapping boxes; volume checks.
+- Box minus sphere ≈ 0.966.
+- Two overlapping boxes fragment into three conformal pieces.
 - Nested `(a - b) + c`.
-- Line-in-cube mixed-dimension fragment.
+- Line-in-box mixed-dimension fragment.
 - Overlapping-group test described in §8.2.
 - Label merge test: same label and dimension produce one group containing both entities.
 - Point-only 0D meshing.
@@ -619,7 +619,7 @@ Build two overlapping labeled cubes, write 4.1, reopen with Gmsh, then reopen wi
 ## 17. Open items and assumptions
 
 1. **Cylinder signature** is provisional: `Cylinder(start, end, radius)`, with `axis = end - start`. Alternative: `Cylinder(base, axis, radius, height)`. Confirm before implementation.
-2. **Primitive signatures assumed**: `Cube(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred.
+2. **Primitive signatures assumed**: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred.
 3. **Boundary orientation**: `EntityRecord.boundary` stores signed tags. Build uses `getBoundary(..., oriented=True)`; the reader preserves signs. If orientation is unknown, empty boundary is allowed.
 4. **Meshless entities**: the reader preserves entities even if they have no elements; the writer requires an `EntityRecord` for every entity referenced by a group.
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.

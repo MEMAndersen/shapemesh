@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from shapemesh import (
-    Cube,
+    Box,
     Difference,
     ElementType,
     Intersection,
@@ -44,39 +44,39 @@ def _volume(mesh):
     return total
 
 
-def test_intersection_of_overlapping_cubes():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((0.5, 0, 0), 1, 1, 1)
+def test_intersection_of_overlapping_boxes():
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0, 0), 1, 1, 1)
     mesh = build(Intersection(a, b), MeshSettings())
     assert len(mesh.entities(dim=3)) == 1
 
 
-def test_difference_of_overlapping_cubes():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((0.5, 0, 0), 1, 1, 1)
+def test_difference_of_overlapping_boxes():
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0, 0), 1, 1, 1)
     mesh = build(Difference(a, b), MeshSettings())
     assert len(mesh.entities(dim=3)) == 1
 
 
-def test_cube_minus_sphere_volume():
-    cube = Cube((0, 0, 0), 1, 1, 1)
+def test_box_minus_sphere_volume():
+    box = Box((0, 0, 0), 1, 1, 1)
     sphere = Sphere((0.5, 0.5, 0.5), 0.2)
-    mesh = build(Difference(cube, sphere), MeshSettings(characteristic_length=0.05))
+    mesh = build(Difference(box, sphere), MeshSettings(characteristic_length=0.05))
     assert _volume(mesh) == pytest.approx(0.966, abs=0.02)
 
 
 def test_nested_difference_then_union():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((0.5, 0, 0), 1, 1, 1)
-    c = Cube((2, 0, 0), 1, 1, 1)
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0, 0), 1, 1, 1)
+    c = Box((2, 0, 0), 1, 1, 1)
     mesh = build(Union(Difference(a, b), c), MeshSettings())
     assert len(mesh.entities(dim=3)) == 2
 
 
-def test_line_in_cube_mixed_dimension():
-    cube = Cube((0, 0, 0), 2, 2, 2, label="cube")
+def test_line_in_box_mixed_dimension():
+    box = Box((0, 0, 0), 2, 2, 2, label="box")
     line = Line((0.5, 1, 1), (1.5, 1, 1), label="line")
-    mesh = build([cube, line], MeshSettings())
+    mesh = build([box, line], MeshSettings())
     assert len(mesh.entities(dim=3)) == 1
-    assert mesh.physical_group("cube", 3).entities
+    assert mesh.physical_group("box", 3).entities
     assert mesh.physical_group("line", 1).entities

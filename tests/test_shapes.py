@@ -21,8 +21,8 @@ import numpy as np
 import pytest
 
 from shapemesh import (
+    Box,
     BuildError,
-    Cube,
     Cylinder,
     Difference,
     GeometryError,
@@ -169,9 +169,9 @@ def test_volume_primitives():
     assert Sphere((0, 0, 0), 1).dimension == 3
     with pytest.raises(GeometryError):
         Sphere((0, 0, 0), 0)
-    assert Cube((0, 0, 0), 1, 1, 1).dimension == 3
+    assert Box((0, 0, 0), 1, 1, 1).dimension == 3
     with pytest.raises(GeometryError):
-        Cube((0, 0, 0), 1, 1, 0)
+        Box((0, 0, 0), 1, 1, 0)
     assert Cylinder((0, 0, 0), (0, 0, 1), 0.5).dimension == 3
     with pytest.raises(GeometryError):
         Cylinder((0, 0, 0), (0, 0, 0), 0.5)
@@ -181,8 +181,8 @@ def test_volume_primitives():
 
 
 def test_boolean_construction_and_dimension():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((0.5, 0.5, 0.5), 1, 1, 1)
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0.5, 0.5), 1, 1, 1)
     assert Union(a, b).dimension == 3
     assert Union(a, b, label="x").label == "x"
     assert isinstance(a | b, Union)
@@ -191,7 +191,7 @@ def test_boolean_construction_and_dimension():
 
 
 def test_boolean_validation_errors():
-    a = Cube((0, 0, 0), 1, 1, 1)
+    a = Box((0, 0, 0), 1, 1, 1)
     with pytest.raises(GeometryError):
         Union(a)  # fewer than 2 operands
     with pytest.raises(GeometryError):
@@ -201,13 +201,13 @@ def test_boolean_validation_errors():
 
 
 def test_boolean_allows_reusing_same_object():
-    a = Cube((0, 0, 0), 1, 1, 1)
+    a = Box((0, 0, 0), 1, 1, 1)
     assert len(Union(a, a).operands) == 2
 
 
 def test_boolean_distinct_equal_objects_allowed():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((0, 0, 0), 1, 1, 1)  # equal value, distinct object
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0, 0, 0), 1, 1, 1)  # equal value, distinct object
     assert len(Union(a, b).operands) == 2
 
 

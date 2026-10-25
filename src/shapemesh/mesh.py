@@ -17,7 +17,7 @@
 
 """Mesh data structures and MSH 4.1 ASCII reader/writer.
 
-The :class:`Mesh` model mirrors Gmsh's MSH 4.1 layout: a global node table, an
+The `Mesh` model mirrors Gmsh's MSH 4.1 layout: a global node table, an
 entity-classified element collection, entity records (boundary + bbox), and
 physical groups. I/O needs no live Gmsh session.
 """
@@ -158,6 +158,15 @@ _CODE_TO_TYPE: dict[int, ElementType] = {int(t): t for t in ElementType}
 
 @dataclass(frozen=True, slots=True)
 class EntityRecord:
+    """A topological entity: dimension, tag, bounding box, and boundary.
+
+    Args:
+        dim: The entity dimension (0-3).
+        tag: The entity tag.
+        bbox: The bounding box ``(xmin, ymin, zmin, xmax, ymax, zmax)``.
+        boundary: Ordered ``(dim, tag)`` pairs of the entity's boundary.
+    """
+
     dim: int
     tag: int
     bbox: tuple[float, float, float, float, float, float]
@@ -166,6 +175,15 @@ class EntityRecord:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NodeTable:
+    """The global node table: tags, coordinates, and entity classification.
+
+    Args:
+        tags: Node tags, shape ``(N,)``.
+        coords: Node coordinates, shape ``(N, 3)``.
+        entity_dim: Owning entity dimension per node, shape ``(N,)``.
+        entity_tag: Owning entity tag per node, shape ``(N,)``.
+    """
+
     tags: np.ndarray  # (N,) int
     coords: np.ndarray  # (N, 3) float
     entity_dim: np.ndarray | None = None  # (N,) int, -1 if unknown
@@ -174,6 +192,16 @@ class NodeTable:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ElementBlock:
+    """A homogeneous block of elements on one entity.
+
+    Args:
+        entity_dim: The owning entity dimension.
+        entity_tag: The owning entity tag.
+        type: The element type.
+        tags: Element tags, shape ``(M,)``.
+        connectivity: Element-to-node connectivity, shape ``(M, k)``.
+    """
+
     entity_dim: int
     entity_tag: int
     type: ElementType
@@ -183,6 +211,15 @@ class ElementBlock:
 
 @dataclass(frozen=True, slots=True)
 class PhysicalGroup:
+    """A named physical group: a label over a set of entities.
+
+    Args:
+        name: The group name (a shape label).
+        dim: The group dimension.
+        tag: The physical group tag.
+        entities: The ``(dim, tag)`` entities in the group.
+    """
+
     name: str
     dim: int
     tag: int
@@ -191,6 +228,15 @@ class PhysicalGroup:
 
 @dataclass(frozen=True, slots=True)
 class MeshMetadata:
+    """Descriptive metadata about a mesh.
+
+    Args:
+        dim: The model dimension.
+        msh_version: The MSH format version.
+        gmsh_version: The Gmsh version that produced the mesh, if known.
+        source: The source path, if read from disk.
+    """
+
     dim: int
     msh_version: str = "4.1"
     gmsh_version: str | None = None
@@ -199,12 +245,26 @@ class MeshMetadata:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NumpyElementBlock:
+    """A numpy-view element block with 0-based index connectivity.
+
+    Args:
+        connectivity: Shape ``(M, k)``; 0-based indices into ``coords``.
+        node_tags: Shape ``(M, k)``; the original Gmsh node tags.
+    """
+
     connectivity: np.ndarray  # (M, k) int, 0-based indices into coords
     node_tags: np.ndarray  # (M, k) int, original Gmsh tags
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class NumpyMesh:
+    """A mesh represented as numpy arrays (see `Mesh.to_numpy`).
+
+    Args:
+        coords: Global node coordinates, shape ``(N, 3)``.
+        blocks: One `NumpyElementBlock` per element type.
+    """
+
     coords: np.ndarray  # (N, 3) float, global
     blocks: dict[ElementType, NumpyElementBlock]
 
@@ -465,6 +525,13 @@ def _synthesize_entities(blocks: list[ElementBlock], nodes: NodeTable) -> list[E
 
 
 class Mesh:
+    """An immutable, entity-classified mesh (MSH 4.1 model).
+
+    A `Mesh` holds a global node table, per-entity element blocks, entity
+    records, physical groups, and metadata. Construct one with `build` or read
+    one from disk with `Mesh.read_msh`.
+    """
+
     __slots__ = ("_elements", "_entities", "_groups", "_metadata", "_nodes")
 
     def __init__(
@@ -495,30 +562,37 @@ class Mesh:
 
     @property
     def nodes(self) -> NodeTable:
+        """The global node table."""
         return self._nodes
 
     @property
     def element_blocks(self) -> tuple[ElementBlock, ...]:
+        """The element blocks, grouped by entity and element type."""
         return self._elements
 
     @property
     def groups(self) -> tuple[PhysicalGroup, ...]:
+        """The physical groups (one per label)."""
         return self._groups
 
     @property
     def metadata(self) -> MeshMetadata:
+        """Descriptive metadata."""
         return self._metadata
 
     @property
     def num_nodes(self) -> int:
+        """The number of nodes."""
         return int(self._nodes.tags.shape[0])
 
     @property
     def num_elements(self) -> int:
+        """The total number of elements."""
         return sum(int(b.tags.shape[0]) for b in self._elements)
 
     @property
     def bbox(self) -> tuple[float, float, float, float, float, float]:
+        """The mesh bounding box ``(xmin, ymin, zmin, xmax, ymax, zmax)``."""
         c = self._nodes.coords
         if c.shape[0] == 0:
             return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -534,30 +608,88 @@ class Mesh:
     # -- queries -----------------------------------------------------------
 
     def entities(self, dim: int | None = None) -> tuple[EntityRecord, ...]:
+        """Return entity records, optionally filtered by dimension.
+
+        Args:
+            dim: The dimension to filter on, or ``None`` for all entities.
+
+        Returns:
+            The matching entity records.
+        """
         if dim is None:
             return self._entities
         return tuple(e for e in self._entities if e.dim == dim)
 
     def physical_group(self, name: str, dim: int) -> PhysicalGroup:
+        """Return the physical group with the given name and dimension.
+
+        Args:
+            name: The group name.
+            dim: The group dimension.
+
+        Returns:
+            The matching `PhysicalGroup`.
+
+        Raises:
+            KeyError: If no such group exists.
+        """
         for group in self._groups:
             if group.name == name and group.dim == dim:
                 return group
         raise KeyError(f"no physical group named {name!r} of dimension {dim}")
 
     def physical_groups_named(self, name: str) -> tuple[PhysicalGroup, ...]:
+        """Return all physical groups with the given name.
+
+        Args:
+            name: The group name.
+
+        Returns:
+            The matching groups (possibly across multiple dimensions).
+        """
         return tuple(g for g in self._groups if g.name == name)
 
     def elements_in_group(self, name: str, dim: int) -> tuple[ElementBlock, ...]:
+        """Return the element blocks belonging to a physical group.
+
+        Args:
+            name: The group name.
+            dim: The group dimension.
+
+        Returns:
+            The element blocks on the group's entities.
+
+        Raises:
+            KeyError: If no such group exists.
+        """
         group = self.physical_group(name, dim)
         members = set(group.entities)
         return tuple(b for b in self._elements if (b.entity_dim, b.entity_tag) in members)
 
     def elements_on_entity(self, dim: int, tag: int) -> tuple[ElementBlock, ...]:
+        """Return the element blocks on a specific entity.
+
+        Args:
+            dim: The entity dimension.
+            tag: The entity tag.
+
+        Returns:
+            The element blocks on that entity.
+        """
         return tuple(b for b in self._elements if b.entity_dim == dim and b.entity_tag == tag)
 
     # -- numpy view --------------------------------------------------------
 
     def to_numpy(self) -> NumpyMesh:
+        """Return a numpy-view representation of the mesh.
+
+        Returns:
+            A `NumpyMesh` with 0-based index connectivity, suitable for
+            solvers.
+
+        Raises:
+            ValueError: If an element references a missing node tag.
+        """
         tags = self._nodes.tags
         index = {int(t): i for i, t in enumerate(tags)}
         blocks: dict[ElementType, NumpyElementBlock] = {}
@@ -580,6 +712,18 @@ class Mesh:
 
     @classmethod
     def read_msh(cls, path: str | Path) -> Mesh:
+        """Read an MSH 4.1 ASCII file.
+
+        Args:
+            path: The path to the ``.msh`` file.
+
+        Returns:
+            The parsed `Mesh`.
+
+        Raises:
+            MeshFormatError: If the file is malformed or uses an unsupported
+                format (e.g. binary, or a version other than 4.1).
+        """
         path = Path(path)
         text = path.read_text(encoding="utf-8")
         sections = _split_sections(text.splitlines())
@@ -620,6 +764,11 @@ class Mesh:
         )
 
     def write_msh(self, path: str | Path) -> None:
+        """Write the mesh as an MSH 4.1 ASCII file.
+
+        Args:
+            path: The destination path.
+        """
         path = Path(path)
         lines: list[str] = []
 

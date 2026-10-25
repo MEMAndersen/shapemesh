@@ -17,9 +17,9 @@
 
 """Exception hierarchy for shapemesh.
 
-Every structured library error derives from :class:`ShapeMeshError`. The
+Every structured library error derives from `ShapeMeshError`. The
 geometry/label/format errors additionally subclass the builtin ``ValueError``
-(and :class:`BuildError` subclasses ``RuntimeError``) so callers can catch them
+(and `BuildError` subclasses ``RuntimeError``) so callers can catch them
 with the usual builtins while still having a single library-wide base.
 """
 

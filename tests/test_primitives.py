@@ -18,7 +18,7 @@
 import pytest
 
 from shapemesh import (
-    Cube,
+    Box,
     Cylinder,
     Line,
     MeshSettings,
@@ -37,11 +37,11 @@ _CASES = [
     (Polygon([(0, 0, 0), (1, 0, 0), (1, 1, 0)]), 2, 1),
     (Rectangle((0, 0, 0), 1, 1), 2, 1),
     (Sphere((0, 0, 0), 1), 3, 1),
-    (Cube((0, 0, 0), 1, 1, 1), 3, 1),
+    (Box((0, 0, 0), 1, 1, 1), 3, 1),
     (Cylinder((0, 0, 0), (0, 0, 1), 0.5), 3, 1),
 ]
 
-_IDS = ["point", "line", "polyline", "polygon", "rectangle", "sphere", "cube", "cylinder"]
+_IDS = ["point", "line", "polyline", "polygon", "rectangle", "sphere", "box", "cylinder"]
 
 
 @pytest.mark.parametrize(("shape", "dim", "count"), _CASES, ids=_IDS)
@@ -60,5 +60,5 @@ def test_point_only_meshing():
 
 
 def test_primitive_group_labeling():
-    mesh = build(Cube((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
+    mesh = build(Box((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
     assert len(mesh.physical_group("box", 3).entities) == 1

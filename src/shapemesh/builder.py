@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
-"""Gmsh build pipeline: shapes + settings -> a validated :class:`Mesh`.
+"""Gmsh build pipeline: shapes + settings -> a validated `Mesh`.
 
 The pipeline validates shapes and settings, realizes them into a Gmsh model,
 fragments overlapping entities to preserve labels, meshes, and reads the
@@ -54,10 +54,24 @@ _RESERVED_OPTIONS = frozenset({"Mesh.MeshSizeMax", "Mesh.Algorithm", "Mesh.Algor
 
 
 def build(shapes: Shape | Sequence[Shape], settings: MeshSettings) -> Mesh:
-    """Realize ``shapes`` with Gmsh and return the resulting :class:`Mesh`.
+    """Realize ``shapes`` with Gmsh and return the resulting `Mesh`.
 
-    ``settings`` is required. A single :class:`Shape` is normalized to a
-    one-element sequence.
+    A single `Shape` is normalized to a one-element sequence. Each shape with a
+    label becomes a physical group of the same name in the resulting mesh.
+
+    Args:
+        shapes: A shape or a sequence of shapes to mesh.
+        settings: The mesh settings.
+
+    Returns:
+        The entity-classified mesh.
+
+    Raises:
+        GeometryError: If ``shapes`` is empty or contains a non-shape.
+        ValueError: If an ``advanced`` option conflicts with an explicit
+            setting.
+        BuildError: If a Gmsh call fails.
+        RuntimeError: If Gmsh must be initialized from a non-main thread.
     """
     shape_list = _normalize_shapes(shapes)
     _validate_build(shape_list)

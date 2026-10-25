@@ -38,7 +38,7 @@ from .mesh import (
 )
 from .settings import Algorithm2D, Algorithm3D, MeshSettings
 from .shapes import (
-    Cube,
+    Box,
     Cylinder,
     Difference,
     Intersection,
@@ -59,8 +59,8 @@ __version__ = "0.1.0"
 __all__ = [
     "Algorithm2D",
     "Algorithm3D",
+    "Box",
     "BuildError",
-    "Cube",
     "Cylinder",
     "Difference",
     "ElementBlock",

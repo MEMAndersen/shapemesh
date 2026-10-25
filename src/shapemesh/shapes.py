@@ -18,11 +18,10 @@
 """Shape primitives and n-ary boolean operations.
 
 Shapes are immutable, hashable frozen dataclasses. Geometry is validated on
-construction (raising :class:`GeometryError`), coordinates are normalized to
-:class:`Vec3`, and ``label`` is validated by the base class (raising
-:class:`LabelError`). A ``label`` with surrounding whitespace is stripped, which
-emits a :class:`UserWarning` so callers know the stored label differs from the
-one they passed.
+construction (raising `GeometryError`), coordinates are normalized to `Vec3`,
+and ``label`` is validated by the base class (raising `LabelError`). A ``label``
+with surrounding whitespace is stripped, which emits a UserWarning so callers
+know the stored label differs from the one they passed.
 """
 
 from __future__ import annotations
@@ -41,7 +40,7 @@ from .constants import COLLINEARITY_TOLERANCE, PLANARITY_TOLERANCE
 from .errors import GeometryError, LabelError
 
 __all__ = [
-    "Cube",
+    "Box",
     "Cylinder",
     "Difference",
     "Intersection",
@@ -59,7 +58,7 @@ __all__ = [
 
 
 def _validate_label(label: str | None) -> str | None:
-    """Return the normalized (stripped) label, or raise :class:`LabelError`."""
+    """Return the normalized (stripped) label, or raise `LabelError`."""
     if label is None:
         return None
     if not isinstance(label, str):
@@ -98,12 +97,17 @@ class Shape:
     Concrete classes implement ``dimension`` (an int constant on primitives,
     computed on booleans) and validate their geometry in ``__post_init__``,
     calling ``Shape.__post_init__`` to validate the label.
+
+    Args:
+        label: An optional physical-group name. Surrounding whitespace is
+            stripped (with a warning).
     """
 
     label: str | None = None
 
     @property
     def dimension(self) -> int:
+        """Topological dimension of the shape (0, 1, 2, or 3)."""
         raise NotImplementedError
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -132,7 +136,14 @@ class Shape:
 
 @dataclass(frozen=True, slots=True)
 class Vec3:
-    """A 3D coordinate with float components (2D input pads ``z=0``)."""
+    """A 3D coordinate with float components.
+
+    Args:
+        x: The x coordinate.
+        y: The y coordinate.
+        z: The z coordinate (defaults to ``0.0``; two-component input pads
+            ``z=0``).
+    """
 
     x: float
     y: float
@@ -151,11 +162,17 @@ class Vec3:
 
     @classmethod
     def from_any(cls, value: Vec3Like) -> Vec3:
-        """Normalize a :data:`Vec3Like` into a :class:`Vec3`.
+        """Normalize a `Vec3Like` into a `Vec3`.
 
         Accepts a ``Vec3``, a sequence of 2-3 real numbers, or an ndarray.
-        Two-component input pads ``z=0``. A :class:`Shape` (e.g. ``Point``) is
+        Two-component input pads ``z=0``. A `Shape` (e.g. ``Point``) is
         rejected; pass ``.coord`` instead.
+
+        Args:
+            value: The value to normalize.
+
+        Returns:
+            The resulting `Vec3`.
         """
         if isinstance(value, Vec3):
             return value
@@ -178,18 +195,23 @@ class Vec3:
     # -- vector arithmetic -------------------------------------------------
 
     def __add__(self, other: Vec3) -> Vec3:
+        """Return the component-wise sum of two vectors."""
         return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
 
     def __sub__(self, other: Vec3) -> Vec3:
+        """Return the component-wise difference of two vectors."""
         return Vec3(self.x - other.x, self.y - other.y, self.z - other.z)
 
     def __neg__(self) -> Vec3:
+        """Return the negated vector."""
         return Vec3(-self.x, -self.y, -self.z)
 
     def dot(self, other: Vec3) -> float:
+        """Return the dot product with ``other``."""
         return self.x * other.x + self.y * other.y + self.z * other.z
 
     def cross(self, other: Vec3) -> Vec3:
+        """Return the cross product with ``other``."""
         return Vec3(
             self.y * other.z - self.z * other.y,
             self.z * other.x - self.x * other.z,
@@ -197,9 +219,15 @@ class Vec3:
         )
 
     def length(self) -> float:
+        """Return the Euclidean length (magnitude)."""
         return math.sqrt(self.dot(self))
 
     def normalized(self) -> Vec3:
+        """Return the unit vector in this direction.
+
+        Raises:
+            GeometryError: If the vector has zero length.
+        """
         n = self.length()
         if n == 0.0:
             raise GeometryError("cannot normalize a zero-length vector")
@@ -214,6 +242,17 @@ type Vec3Like = Vec3 | Sequence[float] | np.ndarray
 
 @dataclass(frozen=True, slots=True, init=False)
 class Point(Shape):
+    """A single point (0-dimensional).
+
+    Args:
+        coord: The point location.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``coord`` is not a valid coordinate.
+        LabelError: If ``label`` is invalid.
+    """
+
     coord: Vec3
 
     def __init__(self, coord: Vec3Like, *, label: str | None = None) -> None:
@@ -235,6 +274,18 @@ class Point(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Line(Shape):
+    """A straight line segment between two points (1-dimensional).
+
+    Args:
+        start: The start point.
+        end: The end point.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``start`` and ``end`` coincide, or either is invalid.
+        LabelError: If ``label`` is invalid.
+    """
+
     start: Vec3
     end: Vec3
 
@@ -262,6 +313,21 @@ class Line(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Polyline(Shape):
+    """A connected chain of line segments (1-dimensional).
+
+    The polyline is closed when the first and last points coincide (see
+    ``closed``).
+
+    Args:
+        points: Two or more vertices.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If there are fewer than 2 points, consecutive points
+            coincide, or a closed polyline has fewer than 3 distinct points.
+        LabelError: If ``label`` is invalid.
+    """
+
     points: tuple[Vec3, ...]
 
     def __init__(self, points: Sequence[Vec3Like], *, label: str | None = None) -> None:
@@ -279,6 +345,7 @@ class Polyline(Shape):
 
     @property
     def closed(self) -> bool:
+        """Whether the polyline is closed (first point equals last point)."""
         return self.points[0] == self.points[-1]
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -295,6 +362,21 @@ class Polyline(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Polygon(Shape):
+    """A planar polygon (2-dimensional).
+
+    Vertices must be distinct, non-collinear, and coplanar. The boundary is
+    closed implicitly, so the final point must not repeat the first.
+
+    Args:
+        points: Three or more vertices.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If the vertices are not distinct, non-collinear, and
+            coplanar.
+        LabelError: If ``label`` is invalid.
+    """
+
     points: tuple[Vec3, ...]
 
     def __init__(self, points: Sequence[Vec3Like], *, label: str | None = None) -> None:
@@ -320,6 +402,20 @@ class Polygon(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Rectangle(Shape):
+    """An axis-aligned rectangle in the ``z = 0`` plane (2-dimensional).
+
+    Args:
+        origin: The lower-left corner (must have ``z = 0``).
+        dx: The width along ``x`` (positive).
+        dy: The height along ``y`` (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``origin`` is not in the ``z = 0`` plane, or ``dx``
+            or ``dy`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
     origin: Vec3
     dx: float
     dy: float
@@ -351,6 +447,18 @@ class Rectangle(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Sphere(Shape):
+    """A sphere (3-dimensional).
+
+    Args:
+        center: The center.
+        radius: The radius (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``radius`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
     center: Vec3
     radius: float
 
@@ -374,7 +482,21 @@ class Sphere(Shape):
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class Cube(Shape):
+class Box(Shape):
+    """An axis-aligned rectangular box (3-dimensional).
+
+    Args:
+        origin: The lower corner.
+        dx: The extent along ``x`` (positive).
+        dy: The extent along ``y`` (positive).
+        dz: The extent along ``z`` (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``dx``, ``dy``, or ``dz`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
     origin: Vec3
     dx: float
     dy: float
@@ -409,6 +531,23 @@ class Cube(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Cylinder(Shape):
+    """A right circular cylinder (3-dimensional).
+
+    The axis runs from ``start`` to ``end``; ``radius`` is the cylinder's
+    radius.
+
+    Args:
+        start: One endpoint of the axis.
+        end: The other endpoint of the axis (must differ from ``start``).
+        radius: The radius (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``start`` and ``end`` coincide, or ``radius`` is not
+            positive.
+        LabelError: If ``label`` is invalid.
+    """
+
     start: Vec3
     end: Vec3
     radius: float
@@ -498,6 +637,8 @@ def _find_polygon_normal(points: tuple[Vec3, ...]) -> Vec3 | None:
 
 @dataclass(frozen=True, slots=True, init=False)
 class _Boolean(Shape):
+    """Base class for the n-ary boolean operations."""
+
     operands: tuple[Shape, ...]
 
     def __init__(self, *operands: Shape, label: str | None = None) -> None:
@@ -525,6 +666,15 @@ class Union(_Boolean):
 
     ``Union(a, b, c)`` realizes ``a | b | c``. Union is associative, so the
     n-ary form equals nested binary unions.
+
+    Args:
+        operands: Two or more same-dimension shapes to unite.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If there are fewer than 2 operands, the operands have
+            mixed dimensions, or the result is empty.
+        LabelError: If ``label`` is invalid.
     """
 
     __slots__ = ()
@@ -546,6 +696,15 @@ class Intersection(_Boolean):
     Note: Gmsh's ``occ.intersect(object, tools)`` computes the common part of
     the object and the union of the tools instead, so the n-ary intersection
     cannot be expressed in a single Gmsh call.
+
+    Args:
+        operands: Two or more same-dimension shapes to intersect.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If there are fewer than 2 operands, the operands have
+            mixed dimensions, or the result is empty.
+        LabelError: If ``label`` is invalid.
     """
 
     __slots__ = ()
@@ -563,6 +722,16 @@ class Difference(_Boolean):
     """Boolean difference: the first operand minus the union of the rest.
 
     ``Difference(a, b, c)`` realizes ``a - (b | c)``.
+
+    Args:
+        operands: The shape to subtract from, followed by one or more shapes
+            to subtract.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If there are fewer than 2 operands, the operands have
+            mixed dimensions, or the result is empty.
+        LabelError: If ``label`` is invalid.
     """
 
     __slots__ = ()

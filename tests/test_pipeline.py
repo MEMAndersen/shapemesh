@@ -18,7 +18,7 @@
 import pytest
 
 from shapemesh import (
-    Cube,
+    Box,
     GeometryError,
     Intersection,
     Mesh,
@@ -28,8 +28,8 @@ from shapemesh import (
 )
 
 
-def test_build_single_cube():
-    mesh = build(Cube((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
+def test_build_single_box():
+    mesh = build(Box((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
     assert mesh.num_nodes > 0
     assert mesh.num_elements > 0
     assert mesh.metadata.dim == 3
@@ -37,9 +37,9 @@ def test_build_single_cube():
     assert mesh.physical_group("box", 3).entities == ((3, 1),)
 
 
-def test_build_two_overlapping_cubes_fragment():
-    a = Cube((0, 0, 0), 1, 1, 1, label="a")
-    b = Cube((0.5, 0, 0), 1, 1, 1, label="b")
+def test_build_two_overlapping_boxes_fragment():
+    a = Box((0, 0, 0), 1, 1, 1, label="a")
+    b = Box((0.5, 0, 0), 1, 1, 1, label="b")
     mesh = build([a, b], MeshSettings())
 
     assert len(mesh.entities(dim=3)) == 3
@@ -52,34 +52,34 @@ def test_build_two_overlapping_cubes_fragment():
 
 
 def test_build_single_shape_is_normalized():
-    mesh = build(Cube((0, 0, 0), 1, 1, 1), MeshSettings())
+    mesh = build(Box((0, 0, 0), 1, 1, 1), MeshSettings())
     assert mesh.num_elements > 0
 
 
 def test_boolean_union():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((0.5, 0, 0), 1, 1, 1)
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0, 0), 1, 1, 1)
     mesh = build(Union(a, b, label="u"), MeshSettings())
     assert len(mesh.entities(dim=3)) == 1
     assert mesh.physical_group("u", 3).entities == ((3, 1),)
 
 
 def test_empty_intersection_raises():
-    a = Cube((0, 0, 0), 1, 1, 1)
-    b = Cube((5, 5, 5), 1, 1, 1)  # disjoint
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((5, 5, 5), 1, 1, 1)  # disjoint
     with pytest.raises(GeometryError):
         build(Intersection(a, b), MeshSettings())
 
 
 def test_shape_reuse_allowed():
-    a = Cube((0, 0, 0), 1, 1, 1)
+    a = Box((0, 0, 0), 1, 1, 1)
     mesh = build([a, a], MeshSettings())  # reusing the same object is allowed
     assert mesh.num_elements > 0
 
 
 def test_roundtrip_through_msh(tmp_path):
-    mesh = build(Cube((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
-    path = tmp_path / "cube.msh"
+    mesh = build(Box((0, 0, 0), 1, 1, 1, label="box"), MeshSettings())
+    path = tmp_path / "box.msh"
     mesh.write_msh(path)
     reread = Mesh.read_msh(path)
     assert reread.num_nodes == mesh.num_nodes
@@ -88,8 +88,8 @@ def test_roundtrip_through_msh(tmp_path):
 
 
 def test_same_label_and_dimension_merge_into_one_group():
-    a = Cube((0, 0, 0), 1, 1, 1, label="wall")
-    b = Cube((2, 0, 0), 1, 1, 1, label="wall")
+    a = Box((0, 0, 0), 1, 1, 1, label="wall")
+    b = Box((2, 0, 0), 1, 1, 1, label="wall")
     mesh = build([a, b], MeshSettings())
     group = mesh.physical_group("wall", 3)
     assert len(group.entities) == 2

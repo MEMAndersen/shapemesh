@@ -37,6 +37,37 @@ Kruse):
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 ```
 
+## Docstrings
+
+Public API docstrings use **Google style**:
+
+- A one-line summary, then a blank line, then sections.
+- Sections are ``Args:``, ``Returns:`` (or ``Yields:``), ``Raises:``, and
+  ``Examples:``. Each entry is ``name: description``, indented 4 spaces, with
+  continuation lines indented to align under the description.
+- Omit the type in ``Args``/``Returns`` when the signature already annotates it.
+- Cross-reference project objects with single backticks (`` `Mesh` ``) and
+  inline code with double backticks (`` ``.msh`` ``). Do not use Sphinx roles
+  (``:class:``, ``:meth:``, ``:func:``).
+- Document every public class, function, method, and property. Include a
+  ``Raises:`` section whenever it can raise.
+
+```python
+def build(shapes, settings):
+    """Realize ``shapes`` with Gmsh and return the resulting `Mesh`.
+
+    Args:
+        shapes: A shape or a sequence of shapes to mesh.
+        settings: The mesh settings.
+
+    Returns:
+        The entity-classified mesh.
+
+    Raises:
+        BuildError: If a Gmsh call fails.
+    """
+```
+
 ## Commit messages
 
 We follow the spirit of [Common Changelog](https://common-changelog.org/):

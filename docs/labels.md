@@ -28,7 +28,7 @@ consumed and silently dropped:
 
 ```python
 # "a" and "b" are gone; only "result" survives.
-build(Union(Cube(...), Cube(...), label="result"), settings)
+build(Union(Box(...), Box(...), label="result"), settings)
 ```
 
 ## Label rules

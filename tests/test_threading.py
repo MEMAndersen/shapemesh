@@ -17,7 +17,7 @@
 
 import threading
 
-from shapemesh import Cube, MeshSettings, build
+from shapemesh import Box, MeshSettings, build
 
 
 def test_build_from_worker_thread_raises_without_gmsh():
@@ -25,7 +25,7 @@ def test_build_from_worker_thread_raises_without_gmsh():
 
     def run():
         try:
-            build(Cube((0, 0, 0), 1, 1, 1), MeshSettings())
+            build(Box((0, 0, 0), 1, 1, 1), MeshSettings())
         except RuntimeError as exc:
             errors.append(str(exc))
 
@@ -44,7 +44,7 @@ def test_build_from_worker_threads_when_gmsh_initialized():
 
         def run():
             try:
-                mesh = build(Cube((0, 0, 0), 1, 1, 1), MeshSettings())
+                mesh = build(Box((0, 0, 0), 1, 1, 1), MeshSettings())
                 assert mesh.num_elements > 0
             except Exception as exc:
                 errors.append(exc)

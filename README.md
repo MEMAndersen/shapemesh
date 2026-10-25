@@ -7,7 +7,7 @@ n-ary booleans, and entity-level MSH 4.1 I/O.
 
 ## Features
 
-- 8 shape primitives: Point, Line, Polyline, Polygon, Rectangle, Sphere, Cube, Cylinder
+- 8 shape primitives: Point, Line, Polyline, Polygon, Rectangle, Sphere, Box, Cylinder
 - n-ary boolean `Union` / `Intersection` / `Difference`
 - Overlapping physical groups via fragment remap
 - MSH 4.1 ASCII read/write (no live Gmsh session required for I/O)
@@ -21,9 +21,9 @@ pip install shapemesh
 ## Quick start
 
 ```python
-from shapemesh import Cube, MeshSettings, build
+from shapemesh import Box, MeshSettings, build
 
-mesh = build(Cube((0, 0, 0), 1, 1, 1, label="column"), MeshSettings())
+mesh = build(Box((0, 0, 0), 1, 1, 1, label="column"), MeshSettings())
 mesh.write_msh("column.msh")
 ```
 
