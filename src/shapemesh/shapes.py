@@ -506,8 +506,8 @@ class _Boolean(Shape):
 class Union(_Boolean):
     """Boolean union of two or more same-dimension operands.
 
-    ``Union(a, b, c)`` realizes the set union of all operands. Union is
-    associative, so the n-ary form equals nested binary unions.
+    ``Union(a, b, c)`` realizes ``a | b | c``. Union is associative, so the
+    n-ary form equals nested binary unions.
     """
 
     __slots__ = ()
@@ -522,9 +522,9 @@ class Union(_Boolean):
 class Intersection(_Boolean):
     """Boolean intersection of two or more same-dimension operands.
 
-    ``Intersection(a, b, c)`` realizes the region common to all operands, by
-    chaining pairwise intersections. Intersection is associative, so this equals
-    ``Intersection(Intersection(a, b), c)``.
+    ``Intersection(a, b, c)`` realizes ``a & b & c`` (the region common to all
+    operands), by chaining pairwise intersections. Intersection is associative,
+    so this equals ``Intersection(Intersection(a, b), c)``.
 
     Note: Gmsh's ``occ.intersect(object, tools)`` computes the common part of
     the object and the union of the tools instead, so the n-ary intersection
@@ -545,7 +545,7 @@ class Intersection(_Boolean):
 class Difference(_Boolean):
     """Boolean difference: the first operand minus the union of the rest.
 
-    ``Difference(a, b, c)`` realizes ``a`` minus the union of ``b`` and ``c``.
+    ``Difference(a, b, c)`` realizes ``a - (b | c)``.
     """
 
     __slots__ = ()
