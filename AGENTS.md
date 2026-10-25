@@ -4,7 +4,7 @@ Guidance for contributors and AI agents working in this repository.
 
 ## Design
 
-The source of truth for the current scope is `.plans/design-v1.md`. Keep it up
+The source of truth for the current scope is `design-v1.md`. Keep it up
 to date as you implement within its scope.
 
 ## Commit messages

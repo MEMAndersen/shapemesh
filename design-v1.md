@@ -71,8 +71,8 @@ shapemesh/
 ├── pyproject.toml
 ├── LICENSE
 ├── README.md
-├── .plans/
-│   └── design-v1.md
+├── AGENTS.md
+├── design-v1.md
 ├── src/
 │   └── shapemesh/
 │       ├── __init__.py

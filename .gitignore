@@ -16,6 +16,5 @@ dist/
 *.egg-info/
 .eggs/
 
-# Existing entry
-.plans/
+# Editor settings
 .vscode/settings.json
