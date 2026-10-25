@@ -23,8 +23,12 @@ import pytest
 from shapemesh import (
     Box,
     BuildError,
+    Circle,
     Cylinder,
     Difference,
+    Disk,
+    Ellipse,
+    EllipticalDisk,
     GeometryError,
     Intersection,
     LabelError,
@@ -162,6 +166,25 @@ def test_rectangle_validation():
     assert Rectangle((0, 0, 1), 1, 2).origin == Vec3(0, 0, 1)  # any z is allowed
     with pytest.raises(GeometryError):
         Rectangle((0, 0, 0), -1, 2)  # dx <= 0
+
+
+def test_curve_primitives():
+    assert Circle((0, 0, 0), 1).dimension == 1
+    assert Ellipse((0, 0, 0), 2, 1).dimension == 1
+    with pytest.raises(GeometryError):
+        Circle((0, 0, 0), 0)
+    with pytest.raises(GeometryError):
+        Ellipse((0, 0, 0), 1, -1)
+
+
+def test_disk_primitives():
+    assert Disk((0, 0, 0), 1).dimension == 2
+    assert Disk((0, 0, 2), 1).center == Vec3(0, 0, 2)  # any z is allowed
+    assert EllipticalDisk((0, 0, 0), 2, 1).dimension == 2
+    with pytest.raises(GeometryError):
+        Disk((0, 0, 0), 0)
+    with pytest.raises(GeometryError):
+        EllipticalDisk((0, 0, 0), 1, 0)
 
 
 def test_volume_primitives():

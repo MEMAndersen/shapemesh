@@ -19,7 +19,11 @@ import pytest
 
 from shapemesh import (
     Box,
+    Circle,
     Cylinder,
+    Disk,
+    Ellipse,
+    EllipticalDisk,
     Line,
     MeshSettings,
     Point,
@@ -34,14 +38,31 @@ _CASES = [
     (Point((0, 0, 0)), 0, 1),
     (Line((0, 0, 0), (1, 0, 0)), 1, 1),
     (Polyline([(0, 0, 0), (1, 0, 0), (1, 1, 0)]), 1, 2),
+    (Circle((0, 0, 0), 1), 1, 1),
+    (Ellipse((0, 0, 0), 2, 1), 1, 1),
     (Polygon([(0, 0, 0), (1, 0, 0), (1, 1, 0)]), 2, 1),
     (Rectangle((0, 0, 0), 1, 1), 2, 1),
+    (Disk((0, 0, 0), 1), 2, 1),
+    (EllipticalDisk((0, 0, 0), 2, 1), 2, 1),
     (Sphere((0, 0, 0), 1), 3, 1),
     (Box((0, 0, 0), 1, 1, 1), 3, 1),
     (Cylinder((0, 0, 0), (0, 0, 1), 0.5), 3, 1),
 ]
 
-_IDS = ["point", "line", "polyline", "polygon", "rectangle", "sphere", "box", "cylinder"]
+_IDS = [
+    "point",
+    "line",
+    "polyline",
+    "circle",
+    "ellipse",
+    "polygon",
+    "rectangle",
+    "disk",
+    "elliptical_disk",
+    "sphere",
+    "box",
+    "cylinder",
+]
 
 
 @pytest.mark.parametrize(("shape", "dim", "count"), _CASES, ids=_IDS)

@@ -41,8 +41,12 @@ from .errors import GeometryError, LabelError
 
 __all__ = [
     "Box",
+    "Circle",
     "Cylinder",
     "Difference",
+    "Disk",
+    "Ellipse",
+    "EllipticalDisk",
     "Intersection",
     "Line",
     "Point",
@@ -361,6 +365,89 @@ class Polyline(Shape):
 
 
 @dataclass(frozen=True, slots=True, init=False)
+class Circle(Shape):
+    """A circular curve in the plane ``z = center.z`` (1-dimensional).
+
+    This is the boundary curve only; see `Disk` for the filled region.
+
+    Args:
+        center: The circle center.
+        radius: The radius (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``radius`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
+    center: Vec3
+    radius: float
+
+    def __init__(self, center: Vec3Like, radius: float, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "center", Vec3.from_any(center))
+        object.__setattr__(self, "radius", radius)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "radius", _positive_float(self.radius, "radius"))
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        return 1
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        curve = gmsh.model.occ.addCircle(self.center.x, self.center.y, self.center.z, self.radius)
+        return [(1, curve)]
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Ellipse(Shape):
+    """An elliptical curve in the plane ``z = center.z`` (1-dimensional).
+
+    This is the boundary curve only; see `EllipticalDisk` for the filled
+    region.
+
+    Args:
+        center: The ellipse center.
+        rx: The radius along ``x`` (positive).
+        ry: The radius along ``y`` (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``rx`` or ``ry`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
+    center: Vec3
+    rx: float
+    ry: float
+
+    def __init__(self, center: Vec3Like, rx: float, ry: float, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "center", Vec3.from_any(center))
+        object.__setattr__(self, "rx", rx)
+        object.__setattr__(self, "ry", ry)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rx", _positive_float(self.rx, "rx"))
+        object.__setattr__(self, "ry", _positive_float(self.ry, "ry"))
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        return 1
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        curve = gmsh.model.occ.addEllipse(
+            self.center.x, self.center.y, self.center.z, self.rx, self.ry
+        )
+        return [(1, curve)]
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class Polygon(Shape):
     """A planar polygon (2-dimensional).
 
@@ -439,6 +526,84 @@ class Rectangle(Shape):
         surf = gmsh.model.occ.addRectangle(
             self.origin.x, self.origin.y, self.origin.z, self.dx, self.dy
         )
+        return [(2, surf)]
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Disk(Shape):
+    """A filled circular disk in the plane ``z = center.z`` (2-dimensional).
+
+    Args:
+        center: The disk center.
+        radius: The radius (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``radius`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
+    center: Vec3
+    radius: float
+
+    def __init__(self, center: Vec3Like, radius: float, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "center", Vec3.from_any(center))
+        object.__setattr__(self, "radius", radius)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "radius", _positive_float(self.radius, "radius"))
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        return 2
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        surf = gmsh.model.occ.addDisk(
+            self.center.x, self.center.y, self.center.z, self.radius, self.radius
+        )
+        return [(2, surf)]
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class EllipticalDisk(Shape):
+    """A filled elliptical disk in the plane ``z = center.z`` (2-dimensional).
+
+    Args:
+        center: The ellipse center.
+        rx: The radius along ``x`` (positive).
+        ry: The radius along ``y`` (positive).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``rx`` or ``ry`` is not positive.
+        LabelError: If ``label`` is invalid.
+    """
+
+    center: Vec3
+    rx: float
+    ry: float
+
+    def __init__(self, center: Vec3Like, rx: float, ry: float, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "center", Vec3.from_any(center))
+        object.__setattr__(self, "rx", rx)
+        object.__setattr__(self, "ry", ry)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rx", _positive_float(self.rx, "rx"))
+        object.__setattr__(self, "ry", _positive_float(self.ry, "ry"))
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        return 2
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        surf = gmsh.model.occ.addDisk(self.center.x, self.center.y, self.center.z, self.rx, self.ry)
         return [(2, surf)]
 
 

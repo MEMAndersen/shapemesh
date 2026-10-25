@@ -7,7 +7,7 @@ n-ary booleans, and entity-level MSH 4.1 I/O.
 
 ## Features
 
-- 8 shape primitives: Point, Line, Polyline, Polygon, Rectangle, Sphere, Box, Cylinder
+- 12 shape primitives: Point, Line, Polyline, Circle, Ellipse, Polygon, Rectangle, Disk, EllipticalDisk, Sphere, Box, Cylinder
 - n-ary boolean `Union` / `Intersection` / `Difference`
 - Overlapping physical groups via fragment remap
 - MSH 4.1 ASCII read/write (no live Gmsh session required for I/O)

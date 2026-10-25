@@ -13,7 +13,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 
 ## 2. Goals
 
-- Port the core Rust shapes (Point, Line, Polyline, Polygon, Rectangle, Sphere, Box, Cylinder) and n-ary booleans.
+- Port the shape primitives (Point, Line, Polyline, Circle, Ellipse, Polygon, Rectangle, Disk, EllipticalDisk, Sphere, Box, Cylinder) and n-ary booleans.
 - Validate before touching Gmsh.
 - Keep the mesh entity-classified, matching Gmsh's `.msh` model.
 - Provide deterministic label → physical group semantics.
@@ -25,8 +25,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 ## 3. Non-goals (v1)
 
 - Transformations (translate/rotate/scale)
-- Circle, Disk
-- Placement frames for Rectangle
+- Placement frames (arbitrary orientation) for planar shapes
 - Cone, Torus
 - Extrude/Revolve
 - Fillet/Chamfer
@@ -103,8 +102,12 @@ If MSH I/O grows too large, split `mesh.py` into `mesh.py` and `msh.py`.
 Point(coord, *, label=None)
 Line(start, end, *, label=None)
 Polyline(points, *, label=None)             # closed iff points[0] == points[-1]
+Circle(center, radius, *, label=None)       # 1D boundary curve; any constant z
+Ellipse(center, rx, ry, *, label=None)      # 1D boundary curve; any constant z
 Polygon(points, *, label=None)              # any plane
 Rectangle(origin, dx, dy, *, label=None)    # axis-aligned; any constant z
+Disk(center, radius, *, label=None)         # 2D filled circle; any constant z
+EllipticalDisk(center, rx, ry, *, label=None)  # 2D filled ellipse; any constant z
 Sphere(center, radius, *, label=None)
 Box(origin, dx, dy, dz, *, label=None)
 Cylinder(start, end, radius, *, label=None) # provisional signature; see §17
@@ -429,8 +432,12 @@ release lock
 | Point | `occ.addPoint` | 0 |
 | Line | `occ.addLine` | 1 |
 | Polyline | points + individual `occ.addLine` edges | 1 |
+| Circle | `occ.addCircle` | 1 |
+| Ellipse | `occ.addEllipse` | 1 |
 | Polygon | points + lines + `occ.addCurveLoop` + `occ.addPlaneSurface` | 2 |
 | Rectangle | `occ.addRectangle` | 2 |
+| Disk | `occ.addDisk` (r, r) | 2 |
+| EllipticalDisk | `occ.addDisk` (rx, ry) | 2 |
 | Sphere | `occ.addSphere` | 3 |
 | Box | `occ.addBox` | 3 |
 | Cylinder | `occ.addCylinder` | 3 |
@@ -550,8 +557,12 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Point | Valid `Vec3` |
 | Line | Start ≠ end |
 | Polyline | ≥2 points; consecutive points distinct; closed iff first == last; closed form needs ≥3 distinct points |
+| Circle | Radius > 0 |
+| Ellipse | `rx > 0`, `ry > 0` |
 | Polygon | ≥3 distinct points; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
 | Rectangle | `dx > 0`, `dy > 0` |
+| Disk | Radius > 0 |
+| EllipticalDisk | `rx > 0`, `ry > 0` |
 | Sphere | Radius > 0 |
 | Box | `dx > 0`, `dy > 0`, `dz > 0` |
 | Cylinder | Start ≠ end; radius > 0 |
@@ -600,8 +611,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 ## 16. Roadmap (not v1)
 
 - Transforms: translate/rotate/scale
-- Circle, Disk (including placement frames and non-XY variants)
-- Placement frames for Rectangle
+- Placement frames (arbitrary orientation) for planar shapes
 - Cone, Torus
 - Extrude/Revolve
 - Fillet/Chamfer
@@ -617,7 +627,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 ## 17. Open items and assumptions
 
 1. **Cylinder signature** is provisional: `Cylinder(start, end, radius)`, with `axis = end - start`. Alternative: `Cylinder(base, axis, radius, height)`. Confirm before implementation.
-2. **Primitive signatures assumed**: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred.
+2. **Primitive signatures assumed**: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred; `Circle(center, radius)`, `Ellipse(center, rx, ry)`, `Disk(center, radius)`, `EllipticalDisk(center, rx, ry)` (axis-aligned, any constant z).
 3. **Boundary orientation**: `EntityRecord.boundary` stores signed tags. Build uses `getBoundary(..., oriented=True)`; the reader preserves signs. If orientation is unknown, empty boundary is allowed.
 4. **Meshless entities**: the reader preserves entities even if they have no elements; the writer requires an `EntityRecord` for every entity referenced by a group.
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.
