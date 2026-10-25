@@ -15,9 +15,19 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
+import numpy as np
 import pytest
 
-from shapemesh import ElementType, Mesh, MeshFormatError
+from shapemesh import (
+    ElementBlock,
+    ElementType,
+    Mesh,
+    MeshFormatError,
+    MeshSettings,
+    PhysicalGroup,
+    Point,
+    build,
+)
 
 MINIMAL_MSH = """\
 $MeshFormat
@@ -105,6 +115,12 @@ $EndElements
 """
 
 
+def _read_minimal_mesh(tmp_path):
+    path = tmp_path / "minimal.msh"
+    path.write_text(MINIMAL_MSH, encoding="utf-8")
+    return Mesh.read_msh(path)
+
+
 def test_read_minimal(tmp_path):
     path = tmp_path / "tri.msh"
     path.write_text(MINIMAL_MSH, encoding="utf-8")
@@ -157,6 +173,71 @@ def test_roundtrip(tmp_path):
     assert mesh2.num_elements == mesh.num_elements
     assert len(mesh2.entities()) == len(mesh.entities())
     assert mesh2.physical_group("tri", 2).entities == mesh.physical_group("tri", 2).entities
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["single\\slash", "double\\\\slash", "trailing\\"],
+    ids=["single", "repeated", "trailing"],
+)
+def test_physical_group_backslashes_roundtrip(tmp_path, name):
+    mesh = build(Point((0, 0), label=name), MeshSettings())
+    path = tmp_path / "backslash.msh"
+    mesh.write_msh(path)
+
+    reread = Mesh.read_msh(path)
+    assert reread.physical_group(name, 0).name == name
+
+    gmsh = pytest.importorskip("gmsh")
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(str(path))
+        groups = gmsh.model.getPhysicalGroups()
+        assert len(groups) == 1
+        assert gmsh.model.getPhysicalName(*groups[0]) == name
+    finally:
+        gmsh.finalize()
+
+
+@pytest.mark.parametrize(
+    "entity",
+    [(2, 999), (1, 1)],
+    ids=["missing-entity", "wrong-dimension"],
+)
+def test_writer_rejects_invalid_group_membership(tmp_path, entity):
+    base = _read_minimal_mesh(tmp_path)
+    group = PhysicalGroup("invalid", 2, 99, (entity,))
+    mesh = Mesh(base.nodes, base.element_blocks, base.entities(), (group,), base.metadata)
+
+    with pytest.raises(ValueError, match="physical group"):
+        mesh.write_msh(tmp_path / "out.msh")
+
+
+def test_writer_rejects_unknown_element_type(tmp_path):
+    base = _read_minimal_mesh(tmp_path)
+    block = ElementBlock(2, 1, 999, np.array([1]), np.array([[1, 2, 3]]))
+    mesh = Mesh(base.nodes, (block,), base.entities(), (), base.metadata)
+
+    with pytest.raises(ValueError, match="unsupported element type"):
+        mesh.write_msh(tmp_path / "out.msh")
+
+
+@pytest.mark.parametrize(
+    ("tags", "connectivity"),
+    [
+        (np.array([1, 2]), np.array([[1, 2, 3]])),
+        (np.array([1]), np.array([[1, 2]])),
+    ],
+    ids=["tag-count", "node-count"],
+)
+def test_writer_rejects_inconsistent_connectivity(tmp_path, tags, connectivity):
+    base = _read_minimal_mesh(tmp_path)
+    block = ElementBlock(2, 1, ElementType.TRI3, tags, connectivity)
+    mesh = Mesh(base.nodes, (block,), base.entities(), (), base.metadata)
+
+    with pytest.raises(ValueError, match="connectivity"):
+        mesh.write_msh(tmp_path / "out.msh")
 
 
 def test_to_numpy(tmp_path):

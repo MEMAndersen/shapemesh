@@ -385,10 +385,17 @@ def _parse_physical_names(body: list[str]) -> list[tuple[str, int, int]]:
     count = int(lines[0].split()[0])
     groups: list[tuple[str, int, int]] = []
     for line in lines[1 : 1 + count]:
-        parts = shlex.split(line)
+        try:
+            parts = shlex.split(line, posix=False)
+        except ValueError as exc:
+            raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}") from exc
         if len(parts) != 3:
             raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}")
         dim, tag, name = int(parts[0]), int(parts[1]), parts[2]
+        if name[:1] in ('"', "'") or name[-1:] in ('"', "'"):
+            if len(name) < 2 or name[0] != name[-1] or name[0] not in ('"', "'"):
+                raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}")
+            name = name[1:-1]
         groups.append((name, dim, tag))
     return groups
 
@@ -812,7 +819,12 @@ class Mesh:
 
         Args:
             path: The destination path.
+
+        Raises:
+            ValueError: If the mesh data is inconsistent or uses an unsupported
+                element type.
         """
+        self._validate_for_write()
         path = Path(path)
         lines: list[str] = []
 
@@ -866,6 +878,34 @@ class Mesh:
         lines.append("$EndElements")
 
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _validate_for_write(self) -> None:
+        entity_keys = {(entity.dim, entity.tag) for entity in self._entities}
+        for group in self._groups:
+            for dim, tag in group.entities:
+                if dim != group.dim:
+                    raise ValueError(
+                        f"physical group {group.name!r} includes entity ({dim}, {tag}) "
+                        f"with dimension {dim}, expected {group.dim}"
+                    )
+                if (dim, tag) not in entity_keys:
+                    raise ValueError(
+                        f"physical group {group.name!r} references missing entity ({dim}, {tag})"
+                    )
+
+        for block in self._elements:
+            try:
+                element_type = ElementType(block.type)
+            except ValueError as exc:
+                raise ValueError(f"unsupported element type {block.type!r}") from exc
+            if block.tags.ndim != 1:
+                raise ValueError("element tags must be a one-dimensional array")
+            expected_shape = (block.tags.shape[0], _NODE_COUNT[element_type])
+            if block.connectivity.shape != expected_shape:
+                raise ValueError(
+                    f"element connectivity must have shape {expected_shape}, "
+                    f"got {block.connectivity.shape}"
+                )
 
     def _min_element_tag(self) -> int:
         if not self._elements:

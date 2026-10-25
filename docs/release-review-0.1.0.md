@@ -144,7 +144,8 @@ normalized vertices to be unique before touching Gmsh.
 
 ### M7. Legal backslashes in physical-group names do not round-trip
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/mesh.py:381-393`, `:822-826`;
 `src/shapemesh/shapes.py:64-77`
 
@@ -189,7 +190,8 @@ arrays and handle empty tag extrema explicitly.
 
 ### M11. Required writer-side validation is missing
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/mesh.py:822-834`, `:858-863`, `:902-918`
 
 A physical group referencing an entity without an `EntityRecord` is silently
@@ -396,3 +398,10 @@ classes, functions, methods, and properties against `AGENTS.md`.
   added a repeated non-consecutive-vertex regression. Clarified the design rule.
   M5-M6 verification: 86 tests passed, Ruff lint and formatting passed, and
   Pyright reported 0 errors.
+- 2026-10-25: Fixed M7 by parsing physical-name quotes without POSIX escape
+  processing, preserving Gmsh's literal backslash behavior. Added single,
+  repeated, and trailing backslash round-trips through shapemesh and Gmsh.
+- 2026-10-25: Fixed M11 by validating group memberships, membership dimensions,
+  element types, and tag/connectivity shapes before writing. Added invalid-group,
+  unknown-type, and inconsistent-connectivity regressions. M7/M11 verification:
+  94 tests passed, Ruff lint and formatting passed, and Pyright reported 0 errors.
