@@ -18,3 +18,4 @@ dist/
 
 # Existing entry
 .plans/
+.vscode/settings.json
