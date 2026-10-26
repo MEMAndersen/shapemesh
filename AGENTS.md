@@ -15,8 +15,9 @@ the LGPL is the GPL plus additional permissions:
 - `COPYING` — the GNU GPL-3.0 text.
 - `COPYING.LESSER` — the LGPL-3.0 supplement.
 
-Every new source file must start with this notice (copyright holder: Mads
-Kruse):
+Every new source file must start with the full notice below (copyright holder:
+Mads Kruse). Files under `examples/` may instead use the short notice shown
+after it, so documentation-focused examples stay concise:
 
 ```text
 # Copyright (C) 2026 Mads Kruse
@@ -35,6 +36,13 @@ Kruse):
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
+```
+
+The permitted short form for files under `examples/` is:
+
+```text
+# Copyright (C) 2026 Mads Kruse
+# SPDX-License-Identifier: LGPL-3.0-or-later
 ```
 
 ## Docstrings

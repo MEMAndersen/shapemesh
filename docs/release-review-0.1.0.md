@@ -207,7 +207,8 @@ consistency, and supported element types before writing.
 
 ### M12. The typed distribution lacks its PEP 561 marker
 
-**Status:** Open  
+**Status:** Fixed
+
 **Reference:** `pyproject.toml:23`; missing `src/shapemesh/py.typed`
 
 The package declares `Typing :: Typed`, but neither the source tree nor the
@@ -216,7 +217,8 @@ wheel.
 
 ### M13. Three examples violate the mandatory source-header policy
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `AGENTS.md:18-38`; `examples/beam_with_hole.py:1`,
 `examples/frame.py:1`, `examples/pilecap.py:1`
 
@@ -260,7 +262,8 @@ must lose its development status for the release.
 
 ### L2. `COPYING` omits the canonical GPL application appendix
 
-**Status:** Open  
+**Status:** Fixed
+
 **Reference:** `COPYING:621`
 
 All operative sections 0-17 are present, but the canonical 53-line "How to
@@ -419,3 +422,14 @@ classes, functions, methods, and properties against `AGENTS.md`.
   blocks. Added an empty-block round-trip and repr regression. M8-M10
   verification: 111 tests passed, Ruff lint and formatting passed, and Pyright
   reported 0 errors.
+- 2026-10-26: Fixed M12 by adding `src/shapemesh/py.typed`; verified the marker
+  in freshly built wheel and sdist artifacts.
+- 2026-10-26: Fixed M13 by adding two-line copyright/SPDX notices to all three
+  examples and updating `AGENTS.md` to permit that short form explicitly for
+  documentation-focused examples. Verified the headers in the sdist and reran
+  all examples successfully.
+- 2026-10-26: Fixed L2 by appending the canonical GPL application appendix.
+  Verified that `COPYING` exactly matches the canonical 674-line FSF text and
+  that both archives contain the completed license files. Verification for this
+  block: 111 tests passed, Ruff lint and formatting passed, and Pyright reported
+  0 errors.

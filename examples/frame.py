@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Mads Kruse
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 """
 1D example simple frame
 """

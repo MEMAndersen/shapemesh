@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Mads Kruse
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 """
 3D example of a pilecap with a rectangular pier surface on the top and four
 circular pile interfaces on the bottom.
