@@ -157,7 +157,8 @@ and Gmsh.
 
 ### M8. Declared counts and tag extrema are not consistently validated
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/mesh.py:381-393`, `:450-529`
 
 An `$Elements` header declaring 99 elements but containing one is accepted, as
@@ -167,7 +168,8 @@ against actual records.
 
 ### M9. Malformed or unsupported input leaks unintended exceptions
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/mesh.py:319-323`, `:481-517`, `:769-777`
 
 Truncated elements can raise `IndexError`; inconsistent connectivity rows can
@@ -179,7 +181,8 @@ payload.
 
 ### M10. Valid zero-element blocks break reading, writing, and NumPy conversion
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/mesh.py:282-285`, `:505-517`, `:735-750`,
 `:868-876`
 
@@ -405,3 +408,14 @@ classes, functions, methods, and properties against `AGENTS.md`.
   element types, and tag/connectivity shapes before writing. Added invalid-group,
   unknown-type, and inconsistent-connectivity regressions. M7/M11 verification:
   94 tests passed, Ruff lint and formatting passed, and Pyright reported 0 errors.
+- 2026-10-26: Fixed M8 by validating physical-name, node, and element counts,
+  node/element tag ranges, and missing or extra section data.
+- 2026-10-26: Fixed M9 by translating malformed fields, truncated and ragged
+  elements, and invalid UTF-8 to `MeshFormatError`. Binary input is detected from
+  its ASCII header before payload decoding; a Gmsh-generated binary file was also
+  verified to raise the intended error.
+- 2026-10-26: Fixed M10 by preserving `(0, k)` connectivity through reading,
+  writing, and NumPy conversion and by returning zero tag extrema for empty
+  blocks. Added an empty-block round-trip and repr regression. M8-M10
+  verification: 111 tests passed, Ruff lint and formatting passed, and Pyright
+  reported 0 errors.

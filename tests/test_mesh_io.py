@@ -114,6 +114,11 @@ $Elements
 $EndElements
 """
 
+EMPTY_ELEMENTS_MSH = MINIMAL_MSH.replace(
+    "$Elements\n1 1 1 1\n2 1 2 1\n1 1 2 3\n$EndElements",
+    "$Elements\n1 0 0 0\n0 1 15 0\n$EndElements",
+)
+
 
 def _read_minimal_mesh(tmp_path):
     path = tmp_path / "minimal.msh"
@@ -268,6 +273,119 @@ def test_parametric_nodes_rejected(tmp_path):
 
     with pytest.raises(MeshFormatError, match="parametric"):
         Mesh.read_msh(path)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        MINIMAL_MSH.replace("$PhysicalNames\n1\n", "$PhysicalNames\n2\n"),
+        MINIMAL_MSH.replace("$EndPhysicalNames", '2 2 "extra"\n$EndPhysicalNames'),
+    ],
+    ids=["missing", "extra"],
+)
+def test_physical_names_count_validated(tmp_path, text):
+    path = tmp_path / "invalid.msh"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(MeshFormatError, match="PhysicalNames"):
+        Mesh.read_msh(path)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        MINIMAL_MSH.replace("$Nodes\n1 3 1 3", "$Nodes\n1 4 1 3"),
+        MINIMAL_MSH.replace("$Nodes\n1 3 1 3", "$Nodes\n1 3 0 3"),
+        MINIMAL_MSH.replace("$Nodes\n1 3 1 3", "$Nodes\n1 3 1 4"),
+    ],
+    ids=["total", "minimum", "maximum"],
+)
+def test_node_tag_summary_validated(tmp_path, text):
+    path = tmp_path / "invalid.msh"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(MeshFormatError, match="Nodes"):
+        Mesh.read_msh(path)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        MINIMAL_MSH.replace("$Elements\n1 1 1 1", "$Elements\n1 99 1 1"),
+        MINIMAL_MSH.replace("$Elements\n1 1 1 1", "$Elements\n1 1 0 1"),
+        MINIMAL_MSH.replace("$Elements\n1 1 1 1", "$Elements\n1 1 1 2"),
+        MINIMAL_MSH.replace("$Elements\n1 1 1 1", "$Elements\n2 1 1 1"),
+        MINIMAL_MSH.replace("$EndElements", "1 1 2 3\n$EndElements"),
+    ],
+    ids=["total", "minimum", "maximum", "block-count", "extra-data"],
+)
+def test_element_counts_and_tag_summary_validated(tmp_path, text):
+    path = tmp_path / "invalid.msh"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(MeshFormatError, match="Elements"):
+        Mesh.read_msh(path)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        MINIMAL_MSH.replace("4.1 0 8", "4.1 nope 8"),
+        MINIMAL_MSH.replace("$Nodes\n1 3 1 3", "$Nodes\n1 nope 1 3"),
+        MINIMAL_MSH.replace("2 1 2 1\n1 1 2 3\n$EndElements", "2 1 2 1\n$EndElements"),
+        MINIMAL_MSH.replace(
+            "$Elements\n1 1 1 1\n2 1 2 1\n1 1 2 3\n$EndElements",
+            "$Elements\n1 2 1 2\n2 1 2 2\n1 1 2 3\n2 1 2\n$EndElements",
+        ),
+    ],
+    ids=["format-integer", "node-integer", "truncated-elements", "ragged-elements"],
+)
+def test_malformed_msh_raises_format_error(tmp_path, text):
+    path = tmp_path / "malformed.msh"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(MeshFormatError):
+        Mesh.read_msh(path)
+
+
+def test_binary_msh_rejected_before_decoding(tmp_path):
+    path = tmp_path / "binary.msh"
+    path.write_bytes(b"$MeshFormat\n4.1 1 8\n$EndMeshFormat\n\x80\xf0")
+
+    with pytest.raises(MeshFormatError, match="binary"):
+        Mesh.read_msh(path)
+
+
+def test_invalid_utf8_raises_format_error(tmp_path):
+    path = tmp_path / "invalid-utf8.msh"
+    path.write_bytes(b"$MeshFormat\n4.1 0 8\n$EndMeshFormat\n\xff")
+
+    with pytest.raises(MeshFormatError):
+        Mesh.read_msh(path)
+
+
+def test_empty_element_block_roundtrip(tmp_path):
+    path = tmp_path / "empty-block.msh"
+    path.write_text(EMPTY_ELEMENTS_MSH, encoding="utf-8")
+    mesh = Mesh.read_msh(path)
+
+    assert mesh.num_elements == 0
+    assert len(mesh.element_blocks) == 1
+    block = mesh.element_blocks[0]
+    assert block.type is ElementType.POINT1
+    assert block.tags.shape == (0,)
+    assert block.connectivity.shape == (0, 1)
+
+    numpy_block = mesh.to_numpy().blocks[ElementType.POINT1]
+    assert numpy_block.connectivity.shape == (0, 1)
+    assert numpy_block.node_tags.shape == (0, 1)
+    assert repr(numpy_block) == "NumpyElementBlock(elements=0, nodes_per_element=1)"
+
+    out = tmp_path / "empty-block-out.msh"
+    mesh.write_msh(out)
+    assert "$Elements\n1 0 0 0\n" in out.read_text(encoding="utf-8")
+    reread = Mesh.read_msh(out)
+    assert reread.element_blocks[0].connectivity.shape == (0, 1)
 
 
 def test_public_arrays_are_read_only(tmp_path):

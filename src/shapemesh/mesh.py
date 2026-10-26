@@ -319,8 +319,8 @@ def _iter_tokens(body: list[str]) -> Iterator[str]:
 def _read_int(it: Iterator[str]) -> int:
     try:
         return int(next(it))
-    except StopIteration as exc:
-        raise MeshFormatError("truncated MSH section") from exc
+    except (StopIteration, ValueError) as exc:
+        raise MeshFormatError("truncated or malformed MSH section") from exc
 
 
 def _read_float(it: Iterator[str]) -> float:
@@ -328,6 +328,38 @@ def _read_float(it: Iterator[str]) -> float:
         return float(next(it))
     except (StopIteration, ValueError) as exc:
         raise MeshFormatError("truncated or malformed MSH section") from exc
+
+
+def _parse_int_line(line: str, section: str) -> list[int]:
+    try:
+        return [int(token) for token in line.split()]
+    except ValueError as exc:
+        raise MeshFormatError(f"malformed {section}") from exc
+
+
+def _reject_extra_tokens(it: Iterator[str], section: str) -> None:
+    try:
+        next(it)
+    except StopIteration:
+        return
+    raise MeshFormatError(f"{section} contains extra data")
+
+
+def _validate_tag_summary(
+    section: str,
+    tags: list[int],
+    declared_count: int,
+    declared_min: int,
+    declared_max: int,
+) -> None:
+    if len(tags) != declared_count:
+        raise MeshFormatError(f"{section} declares {declared_count} entries but parsed {len(tags)}")
+    actual_min, actual_max = (min(tags), max(tags)) if tags else (0, 0)
+    if (actual_min, actual_max) != (declared_min, declared_max):
+        raise MeshFormatError(
+            f"{section} declares tag range {declared_min}..{declared_max}, "
+            f"but parsed {actual_min}..{actual_max}"
+        )
 
 
 def _read_bbox(it: Iterator[str]) -> tuple[float, float, float, float, float, float]:
@@ -369,20 +401,41 @@ def _split_sections(lines: list[str]) -> dict[str, list[str]]:
 
 def _parse_mesh_format(body: list[str]) -> None:
     toks = list(_iter_tokens(body))
-    if len(toks) < 3:
+    if len(toks) != 3:
         raise MeshFormatError("malformed $MeshFormat")
-    version, file_type = toks[0], int(toks[1])
+    version = toks[0]
+    try:
+        file_type = int(toks[1])
+    except ValueError as exc:
+        raise MeshFormatError("malformed $MeshFormat") from exc
     if version != "4.1":
         raise MeshFormatError(f"unsupported MSH version {version!r}; only 4.1 is supported")
     if file_type != 0:
         raise MeshFormatError("binary MSH is not supported; only ASCII")
 
 
+def _has_binary_mesh_format(data: bytes) -> bool:
+    header = data.split(b"$EndMeshFormat", 1)[0]
+    tokens = header.split()
+    try:
+        index = tokens.index(b"$MeshFormat")
+    except ValueError:
+        return False
+    return len(tokens) >= index + 3 and tokens[index + 2] == b"1"
+
+
 def _parse_physical_names(body: list[str]) -> list[tuple[str, int, int]]:
     lines = [ln for ln in body if ln.strip()]
     if not lines:
         return []
-    count = int(lines[0].split()[0])
+    try:
+        count = int(lines[0])
+    except ValueError as exc:
+        raise MeshFormatError("malformed $PhysicalNames header") from exc
+    if count < 0 or len(lines) != count + 1:
+        raise MeshFormatError(
+            f"$PhysicalNames declares {count} names but contains {len(lines) - 1}"
+        )
     groups: list[tuple[str, int, int]] = []
     for line in lines[1 : 1 + count]:
         try:
@@ -391,7 +444,11 @@ def _parse_physical_names(body: list[str]) -> list[tuple[str, int, int]]:
             raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}") from exc
         if len(parts) != 3:
             raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}")
-        dim, tag, name = int(parts[0]), int(parts[1]), parts[2]
+        try:
+            dim, tag = int(parts[0]), int(parts[1])
+        except ValueError as exc:
+            raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}") from exc
+        name = parts[2]
         if name[:1] in ('"', "'") or name[-1:] in ('"', "'"):
             if len(name) < 2 or name[0] != name[-1] or name[0] not in ('"', "'"):
                 raise MeshFormatError(f"malformed $PhysicalNames line: {line!r}")
@@ -410,6 +467,8 @@ def _parse_entities(body: list[str]) -> tuple[list[EntityRecord], list[list[int]
         n_volumes = _read_int(it)
     except MeshFormatError:
         raise MeshFormatError("malformed $Entities header") from None
+    if any(count < 0 for count in (n_points, n_curves, n_surfaces, n_volumes)):
+        raise MeshFormatError("$Entities counts must be non-negative")
 
     records: list[EntityRecord] = []
     phys_tags: list[list[int]] = []
@@ -451,6 +510,7 @@ def _parse_entities(body: list[str]) -> tuple[list[EntityRecord], list[list[int]
         boundary = tuple((2, _read_int(it)) for _ in range(nbound))
         records[-1] = EntityRecord(3, tag, bbox, boundary)
 
+    _reject_extra_tokens(it, "$Entities")
     return records, phys_tags
 
 
@@ -458,8 +518,10 @@ def _parse_nodes(body: list[str]) -> NodeTable:
     it = _iter_tokens(body)
     n_blocks = _read_int(it)
     n_nodes = _read_int(it)
-    _read_int(it)  # min node tag
-    _read_int(it)  # max node tag
+    min_node_tag = _read_int(it)
+    max_node_tag = _read_int(it)
+    if n_blocks < 0 or n_nodes < 0:
+        raise MeshFormatError("$Nodes counts must be non-negative")
     tags: list[int] = []
     coords: list[list[float]] = []
     dims: list[int] = []
@@ -471,14 +533,16 @@ def _parse_nodes(body: list[str]) -> NodeTable:
         if parametric:
             raise MeshFormatError("parametric $Nodes blocks are not supported")
         n = _read_int(it)
+        if n < 0:
+            raise MeshFormatError("$Nodes block counts must be non-negative")
         block_tags = [_read_int(it) for _ in range(n)]
         block_coords = [[_read_float(it) for _ in range(3)] for _ in range(n)]
         tags.extend(block_tags)
         coords.extend(block_coords)
         dims.extend([dim] * n)
         etags.extend([tag] * n)
-    if len(tags) != n_nodes:
-        raise MeshFormatError(f"$Nodes declares {n_nodes} nodes but parsed {len(tags)}")
+    _reject_extra_tokens(it, "$Nodes")
+    _validate_tag_summary("$Nodes", tags, n_nodes, min_node_tag, max_node_tag)
     return NodeTable(
         np.array(tags, dtype=np.int64),
         np.array(coords, dtype=np.float64).reshape(-1, 3),
@@ -491,39 +555,63 @@ def _parse_elements(body: list[str]) -> tuple[list[ElementBlock], list[int]]:
     lines = [ln for ln in body if ln.strip()]
     if not lines:
         return [], []
-    header = lines[0].split()
-    n_blocks = int(header[0])
+    header = _parse_int_line(lines[0], "$Elements")
+    if len(header) != 4:
+        raise MeshFormatError("malformed $Elements header")
+    n_blocks, n_elements, min_element_tag, max_element_tag = header
+    if n_blocks < 0 or n_elements < 0:
+        raise MeshFormatError("$Elements counts must be non-negative")
+
     idx = 1
+
+    def next_line() -> str:
+        nonlocal idx
+        if idx >= len(lines):
+            raise MeshFormatError("truncated $Elements section")
+        line = lines[idx]
+        idx += 1
+        return line
+
     raw: list[tuple[int, int, ElementType, list[int], list[list[int]]]] = []
     skipped: list[int] = []
+    all_tags: list[int] = []
     for _ in range(n_blocks):
-        bdim, btag, type_code, count = (int(x) for x in lines[idx].split())
-        idx += 1
+        block_header = _parse_int_line(next_line(), "$Elements")
+        if len(block_header) != 4:
+            raise MeshFormatError("malformed $Elements block header")
+        bdim, btag, type_code, count = block_header
+        if count < 0:
+            raise MeshFormatError("$Elements block counts must be non-negative")
         elem_tags: list[int] = []
         conn: list[list[int]] = []
         for _ in range(count):
-            toks = lines[idx].split()
-            idx += 1
-            elem_tags.append(int(toks[0]))
-            conn.append([int(t) for t in toks[1:]])
+            values = _parse_int_line(next_line(), "$Elements")
+            elem_tags.append(values[0])
+            conn.append(values[1:])
+        all_tags.extend(elem_tags)
         try:
             etype = ElementType(type_code)
         except ValueError:
             skipped.append(type_code)
             continue
         expected = _NODE_COUNT[etype]
-        if conn and len(conn[0]) != expected:
-            raise MeshFormatError(
-                f"element type {type_code} expects {expected} nodes per element, "
-                f"found {len(conn[0])}"
-            )
+        for row in conn:
+            if len(row) != expected:
+                raise MeshFormatError(
+                    f"element type {type_code} expects {expected} nodes per element, "
+                    f"found {len(row)}"
+                )
         raw.append((bdim, btag, etype, elem_tags, conn))
+
+    if idx != len(lines):
+        raise MeshFormatError("$Elements contains extra data")
+    _validate_tag_summary("$Elements", all_tags, n_elements, min_element_tag, max_element_tag)
 
     merged: dict[tuple[int, int, ElementType], ElementBlock] = {}
     for bdim, btag, etype, tags, conn in raw:
         key = (bdim, btag, etype)
         tags_arr = np.array(tags, dtype=np.int64)
-        conn_arr = np.array(conn, dtype=np.int64).reshape(len(conn), -1)
+        conn_arr = np.array(conn, dtype=np.int64).reshape(len(conn), _NODE_COUNT[etype])
         if key in merged:
             prev = merged[key]
             merged[key] = ElementBlock(
@@ -746,7 +834,9 @@ class Mesh:
         blocks: dict[ElementType, NumpyElementBlock] = {}
         for block in self._elements:
             conn = block.connectivity
-            idx = np.array([[index.get(int(t), -1) for t in row] for row in conn], dtype=np.int64)
+            idx = np.array(
+                [[index.get(int(t), -1) for t in row] for row in conn], dtype=np.int64
+            ).reshape(len(conn), _NODE_COUNT[block.type])
             if (idx < 0).any():
                 raise ValueError("element references a missing node tag")
             if block.type in blocks:
@@ -776,7 +866,13 @@ class Mesh:
                 format (e.g. binary, or a version other than 4.1).
         """
         path = Path(path)
-        text = path.read_text(encoding="utf-8")
+        data = path.read_bytes()
+        if _has_binary_mesh_format(data):
+            raise MeshFormatError("binary MSH is not supported; only ASCII")
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise MeshFormatError("MSH input is not valid UTF-8") from exc
         sections = _split_sections(text.splitlines())
         for forbidden in ("PartitionedEntities", "Periodic", "GhostElements", "ParametricNodes"):
             if forbidden in sections:
@@ -908,14 +1004,12 @@ class Mesh:
                 )
 
     def _min_element_tag(self) -> int:
-        if not self._elements:
-            return 0
-        return min(int(b.tags.min()) for b in self._elements if b.tags.shape[0])
+        minima = [int(b.tags.min()) for b in self._elements if b.tags.shape[0]]
+        return min(minima) if minima else 0
 
     def _max_element_tag(self) -> int:
-        if not self._elements:
-            return 0
-        return max(int(b.tags.max()) for b in self._elements if b.tags.shape[0])
+        maxima = [int(b.tags.max()) for b in self._elements if b.tags.shape[0]]
+        return max(maxima) if maxima else 0
 
 
 # -- writing helpers -------------------------------------------------------
