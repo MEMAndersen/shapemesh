@@ -21,6 +21,7 @@ from shapemesh import (
     Algorithm2D,
     Algorithm3D,
     Box,
+    BuildError,
     Disk,
     ElementType,
     GeometryError,
@@ -147,6 +148,14 @@ def test_point_only_high_order_meshing():
     assert mesh.num_nodes == 1
     assert mesh.num_elements == 1
     assert mesh.metadata.dim == 0
+
+
+def test_build_error_log_includes_gmsh_last_error():
+    settings = MeshSettings(advanced=(("Mesh.DefinitelyInvalid", 1),))
+
+    with pytest.raises(BuildError) as caught:
+        build(Box((0, 0, 0), 1, 1, 1), settings)
+    assert "Mesh.DefinitelyInvalid" in caught.value.log
 
 
 def test_boolean_union():

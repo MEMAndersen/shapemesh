@@ -24,6 +24,7 @@ from shapemesh import (
     Mesh,
     MeshFormatError,
     MeshSettings,
+    NodeTable,
     PhysicalGroup,
     Point,
     build,
@@ -394,6 +395,19 @@ def test_public_arrays_are_read_only(tmp_path):
     mesh = Mesh.read_msh(path)
     with pytest.raises(ValueError):
         mesh.nodes.coords[0, 0] = 999.0
+
+
+@pytest.mark.parametrize("field", ["entity_dim", "entity_tag"])
+def test_one_sided_node_classification_is_read_only(tmp_path, field):
+    base = _read_minimal_mesh(tmp_path)
+    if field == "entity_dim":
+        nodes = NodeTable(base.nodes.tags, base.nodes.coords, base.nodes.entity_dim.copy(), None)
+    else:
+        nodes = NodeTable(base.nodes.tags, base.nodes.coords, None, base.nodes.entity_tag.copy())
+    mesh = Mesh(nodes, base.element_blocks, base.entities(), base.groups, base.metadata)
+
+    with pytest.raises(ValueError):
+        getattr(mesh.nodes, field)[0] = 0
 
 
 def test_gmsh_roundtrip(tmp_path):

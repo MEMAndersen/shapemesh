@@ -88,6 +88,13 @@ def test_vec3_from_any_rejects_shapes_and_strings():
         Vec3.from_any([1, 2, 3, 4])
 
 
+def test_vec3_from_any_rejects_undeclared_containers():
+    with pytest.raises(GeometryError):
+        Vec3.from_any({1, 2})
+    with pytest.raises(GeometryError):
+        Vec3.from_any(component for component in (1, 2))
+
+
 def test_vec3_arithmetic():
     a = Vec3(1, 2, 3)
     b = Vec3(4, 5, 6)
@@ -170,6 +177,16 @@ def test_polygon_validation():
 def test_polygon_rejects_repeated_nonconsecutive_vertices():
     with pytest.raises(GeometryError, match="distinct"):
         Polygon([(0, 0), (1, 0), (0, 1), (1, 0)])
+
+
+@pytest.mark.parametrize("shape_type", [Polyline, Polygon])
+def test_point_sequences_reject_non_sequence_containers(shape_type):
+    with pytest.raises(GeometryError):
+        shape_type(None)
+    with pytest.raises(GeometryError):
+        shape_type({(0, 0), (1, 0), (0, 1)})
+    with pytest.raises(GeometryError):
+        shape_type(point for point in [(0, 0), (1, 0), (0, 1)])
 
 
 def test_rectangle_validation():

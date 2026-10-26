@@ -677,8 +677,9 @@ class Mesh:
         _freeze(nodes.coords)
         entity_dim = nodes.entity_dim
         entity_tag = nodes.entity_tag
-        if entity_dim is not None and entity_tag is not None:
+        if entity_dim is not None:
             _freeze(entity_dim)
+        if entity_tag is not None:
             _freeze(entity_tag)
         for block in elements:
             _freeze(block.tags)

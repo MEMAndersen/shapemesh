@@ -275,7 +275,8 @@ complete omission of the GPL text in the stale artifacts.
 
 ### L3. One-sided node classification leaves an array writable
 
-**Status:** Open  
+**Status:** Fixed
+
 **Reference:** `src/shapemesh/mesh.py:579-588`
 
 If only one of `entity_dim` and `entity_tag` is supplied, it is not frozen and
@@ -284,7 +285,8 @@ independently and preferably reject mismatched classification-array state.
 
 ### L4. `BuildError.log` omits Gmsh's last-error diagnostic
 
-**Status:** Open  
+**Status:** Fixed
+
 **Reference:** `src/shapemesh/builder.py:148-152`
 
 The log can be empty even when `gmsh.logger.getLastError()` contains the actual
@@ -292,7 +294,8 @@ failure. Include that diagnostic before model removal or finalization.
 
 ### L5. Container boundaries are inconsistent with the declared API
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/shapes.py:189-197`, `:469-472`
 
 Undeclared sets and generators are accepted as coordinates, while
@@ -433,3 +436,12 @@ classes, functions, methods, and properties against `AGENTS.md`.
   that both archives contain the completed license files. Verification for this
   block: 111 tests passed, Ruff lint and formatting passed, and Pyright reported
   0 errors.
+- 2026-10-26: Fixed L3 by freezing `entity_dim` and `entity_tag` independently;
+  added one-sided classification-array mutation regressions.
+- 2026-10-26: Fixed L4 by including `gmsh.logger.getLastError()` in captured
+  build diagnostics without duplicating existing log lines. Added a real
+  invalid-option build regression.
+- 2026-10-26: Fixed L5 by enforcing declared coordinate-sequence containers and
+  normalizing polyline/polygon points through one helper. Added set, generator,
+  and `None` regressions. L3-L5 verification: 117 tests passed, Ruff lint and
+  formatting passed, and Pyright reported 0 errors.

@@ -181,9 +181,16 @@ def _restore_options(gmsh: Any, options: list[tuple[str, float | int | str]]) ->
 
 def _capture_log(gmsh: Any) -> str:
     try:
-        return "\n".join(gmsh.logger.get())
+        lines = list(gmsh.logger.get())
     except Exception:
-        return ""
+        lines = []
+    try:
+        last_error = gmsh.logger.getLastError()
+    except Exception:
+        last_error = ""
+    if last_error and last_error not in lines:
+        lines.append(last_error)
+    return "\n".join(lines)
 
 
 # -- pipeline --------------------------------------------------------------

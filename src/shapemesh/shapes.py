@@ -194,6 +194,10 @@ class Vec3:
             raise GeometryError(
                 f"expected a Vec3 or a sequence of 2-3 floats, got {type(value).__name__}"
             )
+        if not isinstance(value, (Sequence, np.ndarray)):
+            raise GeometryError(
+                f"expected a Vec3 or a sequence of 2-3 floats, got {type(value).__name__}"
+            )
         try:
             components = list(value)
         except TypeError as exc:
@@ -247,6 +251,12 @@ class Vec3:
 
 
 type Vec3Like = Vec3 | Sequence[float] | np.ndarray
+
+
+def _normalize_point_sequence(points: Sequence[Vec3Like], shape_name: str) -> tuple[Vec3, ...]:
+    if isinstance(points, (str, bytes)) or not isinstance(points, Sequence):
+        raise GeometryError(f"{shape_name} points must be a sequence of coordinates")
+    return tuple(Vec3.from_any(point) for point in points)
 
 
 # -- primitives ------------------------------------------------------------
@@ -344,7 +354,7 @@ class Polyline(Shape):
 
     def __init__(self, points: Sequence[Vec3Like], *, label: str | None = None) -> None:
         object.__setattr__(self, "label", label)
-        object.__setattr__(self, "points", tuple(Vec3.from_any(p) for p in points))
+        object.__setattr__(self, "points", _normalize_point_sequence(points, type(self).__name__))
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -485,7 +495,7 @@ class Polygon(Shape):
 
     def __init__(self, points: Sequence[Vec3Like], *, label: str | None = None) -> None:
         object.__setattr__(self, "label", label)
-        object.__setattr__(self, "points", tuple(Vec3.from_any(p) for p in points))
+        object.__setattr__(self, "points", _normalize_point_sequence(points, type(self).__name__))
         self.__post_init__()
 
     def __post_init__(self) -> None:
