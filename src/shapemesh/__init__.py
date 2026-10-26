@@ -34,6 +34,8 @@ from .mesh import (
     Mesh,
     MeshMetadata,
     NodeTable,
+    NumpyElementBlock,
+    NumpyMesh,
     PhysicalGroup,
 )
 from .settings import Algorithm2D, Algorithm3D, MeshSettings
@@ -83,6 +85,8 @@ __all__ = [
     "MeshMetadata",
     "MeshSettings",
     "NodeTable",
+    "NumpyElementBlock",
+    "NumpyMesh",
     "PhysicalGroup",
     "Point",
     "Polygon",

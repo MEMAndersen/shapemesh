@@ -16,6 +16,7 @@
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
 import warnings
+from dataclasses import replace
 from fractions import Fraction
 
 import numpy as np
@@ -260,6 +261,21 @@ def test_boolean_accepts_sequence():
     assert Difference([a, b]).operands == (a, b)
 
 
+def test_boolean_dataclass_replace():
+    a = Box((0, 0, 0), 1, 1, 1)
+    b = Box((0.5, 0, 0), 1, 1, 1)
+    original = Union(a, b, label="original")
+
+    replaced = replace(original, operands=(a, a), label="replaced")
+    assert isinstance(replaced, Union)
+    assert replaced.operands == (a, a)
+    assert replaced.label == "replaced"
+
+    renamed = replace(replaced, label="renamed")
+    assert renamed.operands == (a, a)
+    assert renamed.label == "renamed"
+
+
 def test_boolean_validation_errors():
     a = Box((0, 0, 0), 1, 1, 1)
     with pytest.raises(GeometryError):
@@ -268,6 +284,8 @@ def test_boolean_validation_errors():
         Union(a, Point((0, 0, 0)))  # mixed dimensions
     with pytest.raises(GeometryError):
         Union(a, "not a shape")
+    with pytest.raises(TypeError):
+        Union(a, a, operands=(a, a))
 
 
 def test_boolean_allows_reusing_same_object():

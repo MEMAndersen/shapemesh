@@ -227,11 +227,23 @@ class Line(Shape):
 class Union(Shape):
     operands: tuple[Shape, ...]
 
-    def __init__(self, *operands: Shape, label: str | None = None) -> None:
+    def __init__(
+        self,
+        *args: Shape,
+        label: str | None = None,
+        operands: tuple[Shape, ...] | None = None,
+    ) -> None:
+        if operands is not None:
+            if args:
+                raise TypeError("operands cannot be supplied both positionally and by keyword")
+            args = (operands,)
         object.__setattr__(self, "label", label)
-        object.__setattr__(self, "operands", operands)
+        object.__setattr__(self, "operands", _coerce_operands(args))
         self.__post_init__()
 ```
+
+The keyword-only `operands` path supports `dataclasses.replace`; positional and
+keyword operand forms are mutually exclusive.
 
 ### 7.2 Labels and physical groups
 

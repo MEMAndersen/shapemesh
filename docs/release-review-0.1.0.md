@@ -305,7 +305,8 @@ widen the declared API.
 
 ### L6. Standard dataclass replacement is broken for booleans
 
-**Status:** Open  
+**Status:** Fixed
+
 **Reference:** `src/shapemesh/shapes.py:817-826`
 
 `dataclasses.replace(Union(a, b), operands=(a, a))` fails because the custom
@@ -314,7 +315,8 @@ reconstruction or explicitly document that replacement is unsupported.
 
 ### L7. NumPy result types are omitted from top-level exports
 
-**Status:** Open API decision  
+**Status:** Fixed
+
 **References:** `src/shapemesh/mesh.py:38-48`;
 `src/shapemesh/__init__.py:30-38`, `:63-98`
 
@@ -324,7 +326,8 @@ intended narrower API explicit.
 
 ### L8. Some public docstrings violate the repository contract
 
-**Status:** Open  
+**Status:** Fixed
+
 **References:** `src/shapemesh/shapes.py:142-180`, `:270-272`, `:828-830`
 
 Examples include missing `Raises:` sections on `Vec3` and `Vec3.from_any()` and
@@ -355,8 +358,6 @@ classes, functions, methods, and properties against `AGENTS.md`.
 2. `pyproject.toml:26` permits Gmsh 5.x through `gmsh>=4.15`, while
    `docs/version-policy.md:3-7` only claims support for newer 4.x. Either use a
    `<5` bound or broaden and validate the policy.
-3. Decide whether top-level NumPy result exports and dataclass replacement for
-   booleans are supported API, as noted in L6 and L7.
 
 ## Verification during the original review
 
@@ -445,3 +446,13 @@ classes, functions, methods, and properties against `AGENTS.md`.
   normalizing polyline/polygon points through one helper. Added set, generator,
   and `None` regressions. L3-L5 verification: 117 tests passed, Ruff lint and
   formatting passed, and Pyright reported 0 errors.
+- 2026-10-26: Fixed L6 by adding a keyword-only boolean `operands` path for
+  `dataclasses.replace`, while preserving variadic and single-sequence forms and
+  rejecting mixed positional/keyword operands. Added operand and label
+  replacement regressions and updated the design.
+- 2026-10-26: Fixed L7 by re-exporting `NumpyMesh` and `NumpyElementBlock` at
+  package level and using those exports in NumPy-view tests.
+- 2026-10-26: Fixed L8 by documenting `Vec3` exceptions and all 13 concrete
+  `dimension` properties. The public-method docstring check now passes. L6-L8
+  verification: 118 tests passed, Ruff lint and formatting passed, and Pyright
+  reported 0 errors.

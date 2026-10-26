@@ -151,6 +151,10 @@ class Vec3:
         y: The y coordinate.
         z: The z coordinate (defaults to ``0.0``; two-component input pads
             ``z=0``).
+
+    Raises:
+        GeometryError: If a component is not a real number or cannot be
+            represented as a finite float.
     """
 
     x: float
@@ -185,6 +189,10 @@ class Vec3:
 
         Returns:
             The resulting `Vec3`.
+
+        Raises:
+            GeometryError: If ``value`` is not a supported coordinate or has
+                an invalid component count or value.
         """
         if isinstance(value, Vec3):
             return value
@@ -287,6 +295,7 @@ class Point(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 0
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -324,6 +333,7 @@ class Line(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 1
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -363,6 +373,7 @@ class Polyline(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 1
 
     @property
@@ -413,6 +424,7 @@ class Circle(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 1
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -456,6 +468,7 @@ class Ellipse(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 1
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -504,6 +517,7 @@ class Polygon(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -547,6 +561,7 @@ class Rectangle(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -585,6 +600,7 @@ class Disk(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -627,6 +643,7 @@ class EllipticalDisk(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -674,6 +691,7 @@ class Sphere(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 3
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -720,6 +738,7 @@ class Box(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 3
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -769,6 +788,7 @@ class Cylinder(Shape):
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return 3
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
@@ -861,13 +881,23 @@ class _Boolean(Shape):
 
     operands: tuple[Shape, ...]
 
-    def __init__(self, *operands: Shape | Sequence[Shape], label: str | None = None) -> None:
+    def __init__(
+        self,
+        *args: Shape | Sequence[Shape],
+        label: str | None = None,
+        operands: tuple[Shape, ...] | None = None,
+    ) -> None:
+        if operands is not None:
+            if args:
+                raise TypeError("operands cannot be supplied both positionally and by keyword")
+            args = (operands,)
         object.__setattr__(self, "label", label)
-        object.__setattr__(self, "operands", _coerce_operands(operands))
+        object.__setattr__(self, "operands", _coerce_operands(args))
         self.__post_init__()
 
     @property
     def dimension(self) -> int:
+        """The topological dimension of the shape."""
         return self.operands[0].dimension
 
     def __post_init__(self) -> None:

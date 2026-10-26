@@ -25,6 +25,8 @@ from shapemesh import (
     MeshFormatError,
     MeshSettings,
     NodeTable,
+    NumpyElementBlock,
+    NumpyMesh,
     PhysicalGroup,
     Point,
     build,
@@ -252,9 +254,11 @@ def test_to_numpy(tmp_path):
     mesh = Mesh.read_msh(path)
 
     result = mesh.to_numpy()
+    assert isinstance(result, NumpyMesh)
     assert result.coords.shape == (3, 3)
     assert ElementType.TRI3 in result.blocks
     block = result.blocks[ElementType.TRI3]
+    assert isinstance(block, NumpyElementBlock)
     assert block.connectivity.tolist() == [[0, 1, 2]]
     assert block.node_tags.tolist() == [[1, 2, 3]]
 
