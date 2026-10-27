@@ -340,8 +340,9 @@ classes, functions, methods, and properties against `AGENTS.md`.
    labeled boxes, shapemesh write, Gmsh reopen, then shapemesh reopen. Verify
    both memberships, multiple physical tags, connectivity, coordinates, and
    signed boundaries.~~ Done.
-2. Strengthen existing round-trips, which mostly compare counts rather than
-   full mesh and entity fidelity.
+2. ~~Strengthen existing round-trips, which mostly compare counts rather than
+   full mesh and entity fidelity.~~ Done for the build-to-MSH, minimal-MSH, and
+   Gmsh-generated round-trips.
 3. Add regressions for every corrected finding, including higher-order
    generation, option isolation and conflicts, `rx < ry`, empty blocks,
    malformed input, and numeric boundaries.
@@ -352,12 +353,8 @@ classes, functions, methods, and properties against `AGENTS.md`.
 
 ## Open questions before freezing the API
 
-1. `design-v1.md:183` specifies `ValueError` for settings validation, while
-   `:381` says `order="3"` raises `TypeError`. Code and tests currently use
-   `ValueError`. Resolve the contradiction explicitly.
-2. `pyproject.toml:26` permits Gmsh 5.x through `gmsh>=4.15`, while
-   `docs/version-policy.md:3-7` only claims support for newer 4.x. Either use a
-   `<5` bound or broaden and validate the policy.
+None remaining. The settings-validation exception type and the Gmsh version
+bound were resolved in this block.
 
 ## Verification during the original review
 
@@ -467,3 +464,11 @@ classes, functions, methods, and properties against `AGENTS.md`.
   polyline, polygon, disk, sphere, and cylinder. Test-coverage verification:
   128 tests passed, Ruff lint and formatting passed, and Pyright reported 0
   errors.
+- 2026-10-27: Resolved the settings-validation contradiction by updating
+  `design-v1.md` to state that `order="3"` raises `ValueError` from
+  `__post_init__`, matching code and tests. Broadened the Gmsh dependency to
+  `gmsh>=4.0` in `pyproject.toml` and updated `docs/version-policy.md` to
+  require 4.0+ while noting testing against 4.15.2. Strengthened MSH round-trip
+  tests to compare node tags/coordinates and element-block keys, tags, and
+  connectivity. Policy-and-roundtrip verification: 128 tests passed, Ruff lint
+  and formatting passed, and Pyright reported 0 errors.

@@ -23,7 +23,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "gmsh>=4.15",
+    "gmsh>=4.0",
     "numpy>=2.0",
 ]
 

@@ -215,7 +215,25 @@ def test_roundtrip_through_msh(tmp_path):
     reread = Mesh.read_msh(path)
     assert reread.num_nodes == mesh.num_nodes
     assert reread.num_elements == mesh.num_elements
+    assert reread.metadata.dim == mesh.metadata.dim
     assert reread.physical_group("box", 3).entities == mesh.physical_group("box", 3).entities
+
+    # Node tags and coordinates survive exactly.
+    assert np.array_equal(reread.nodes.tags, mesh.nodes.tags)
+    assert np.allclose(reread.nodes.coords, mesh.nodes.coords)
+
+    # Element blocks survive with the same keys and connectivity shape.
+    def block_key(block):
+        return (block.entity_dim, block.entity_tag, int(block.type))
+
+    original = {block_key(b): b for b in mesh.element_blocks}
+    reread_blocks = {block_key(b): b for b in reread.element_blocks}
+    assert set(reread_blocks) == set(original)
+    for key, orig in original.items():
+        rb = reread_blocks[key]
+        assert rb.connectivity.shape == orig.connectivity.shape
+        assert np.array_equal(rb.connectivity, orig.connectivity)
+        assert np.array_equal(rb.tags, orig.tags)
 
 
 def test_same_label_and_dimension_merge_into_one_group():

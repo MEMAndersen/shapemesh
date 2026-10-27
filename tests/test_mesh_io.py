@@ -168,6 +168,27 @@ def test_repr_summaries(tmp_path):
     )
 
 
+def _assert_mesh_fidelity(original, reread):
+    assert reread.num_nodes == original.num_nodes
+    assert reread.num_elements == original.num_elements
+    assert reread.metadata.dim == original.metadata.dim
+    assert len(reread.entities()) == len(original.entities())
+    assert np.array_equal(reread.nodes.tags, original.nodes.tags)
+    assert np.allclose(reread.nodes.coords, original.nodes.coords)
+
+    def block_key(block):
+        return (block.entity_dim, block.entity_tag, int(block.type))
+
+    orig_blocks = {block_key(b): b for b in original.element_blocks}
+    reread_blocks = {block_key(b): b for b in reread.element_blocks}
+    assert set(reread_blocks) == set(orig_blocks)
+    for key, orig in orig_blocks.items():
+        rb = reread_blocks[key]
+        assert rb.connectivity.shape == orig.connectivity.shape
+        assert np.array_equal(rb.connectivity, orig.connectivity)
+        assert np.array_equal(rb.tags, orig.tags)
+
+
 def test_roundtrip(tmp_path):
     path = tmp_path / "tri.msh"
     path.write_text(MINIMAL_MSH, encoding="utf-8")
@@ -177,9 +198,7 @@ def test_roundtrip(tmp_path):
     mesh.write_msh(out)
     mesh2 = Mesh.read_msh(out)
 
-    assert mesh2.num_nodes == mesh.num_nodes
-    assert mesh2.num_elements == mesh.num_elements
-    assert len(mesh2.entities()) == len(mesh.entities())
+    _assert_mesh_fidelity(mesh, mesh2)
     assert mesh2.physical_group("tri", 2).entities == mesh.physical_group("tri", 2).entities
 
 
@@ -436,5 +455,4 @@ def test_gmsh_roundtrip(tmp_path):
     out = tmp_path / "box2.msh"
     mesh.write_msh(out)
     mesh2 = Mesh.read_msh(out)
-    assert mesh2.num_nodes == mesh.num_nodes
-    assert mesh2.num_elements == mesh.num_elements
+    _assert_mesh_fidelity(mesh, mesh2)

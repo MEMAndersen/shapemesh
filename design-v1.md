@@ -390,7 +390,7 @@ class MeshSettings:
         return dataclasses.replace(self, **changes)  # re-runs __post_init__
 ```
 
-- `MeshSettings` is a plain frozen dataclass, not a pydantic model: the generated `__init__` rejects unknown kwargs (the `extra="forbid"` equivalent), and there is no coercion (e.g. `order="3"` is a `TypeError`), matching the strict-typed goal. `with_` uses `dataclasses.replace`, which re-runs `__post_init__`.
+- `MeshSettings` is a plain frozen dataclass, not a pydantic model: the generated `__init__` rejects unknown kwargs (the `extra="forbid"` equivalent), and there is no coercion (e.g. `order="3"` raises `ValueError` from `__post_init__`), matching the strict-typed goal. `with_` uses `dataclasses.replace`, which re-runs `__post_init__`.
 
 Algorithm enums follow Gmsh 4.15.2:
 
