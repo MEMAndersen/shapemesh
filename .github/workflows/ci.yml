@@ -1,0 +1,249 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.13.5"
+
+jobs:
+  quality:
+    name: Lint, format, and type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_PYTHON: "3.13"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked --python 3.13
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Lint
+        run: uv run --no-sync ruff check .
+
+      - name: Check formatting
+        run: uv run --no-sync ruff format --check .
+
+      - name: Type check
+        run: uv run --no-sync pyright
+
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python-version:
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.15"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Gmsh system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 \
+            libxinerama1 libfontconfig1
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked --python ${{ matrix.python-version }}
+
+      - name: Verify Gmsh version
+        run: uv run --no-sync python -c "import gmsh; assert gmsh.__version__ == '4.15.2', gmsh.__version__"
+
+      - name: Run tests
+        run: uv run --no-sync pytest -q -W error
+
+  package:
+    name: Build and verify distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: "3.13"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Gmsh system libraries (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libglu1-mesa libgl1 libxrender1 libxcursor1 libxft2 \
+            libxinerama1 libfontconfig1
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked --python 3.13
+
+      - name: Build distributions
+        run: |
+          rm -rf dist
+          uv build
+
+      - name: Check distribution metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Verify distribution contents
+        run: |
+          uv run --no-sync python - <<'PY'
+          import pathlib
+          import tarfile
+          import zipfile
+
+          dist = pathlib.Path("dist")
+          wheels = sorted(dist.glob("*.whl"))
+          sdists = sorted(dist.glob("*.tar.gz"))
+          assert len(wheels) == 1, wheels
+          assert len(sdists) == 1, sdists
+          wheel, sdist = wheels[0], sdists[0]
+
+          required_wheel = {
+              "shapemesh/__init__.py",
+              "shapemesh/builder.py",
+              "shapemesh/constants.py",
+              "shapemesh/errors.py",
+              "shapemesh/mesh.py",
+              "shapemesh/py.typed",
+              "shapemesh/settings.py",
+              "shapemesh/shapes.py",
+          }
+
+          with zipfile.ZipFile(wheel) as archive:
+              wheel_entries = {info.filename: info for info in archive.infolist()}
+
+          missing = required_wheel - wheel_entries.keys()
+          assert not missing, f"{wheel.name} is missing {sorted(missing)}"
+          for license_name in ("COPYING", "COPYING.LESSER"):
+              matches = [
+                  info
+                  for name, info in wheel_entries.items()
+                  if name.endswith(f"dist-info/licenses/{license_name}")
+              ]
+              assert matches, f"{wheel.name} is missing {license_name}"
+              assert all(info.file_size > 0 for info in matches)
+
+          required_sdist = {
+              "COPYING",
+              "COPYING.LESSER",
+              "README.md",
+              "pyproject.toml",
+              "examples/beam_with_hole.py",
+              "examples/frame.py",
+              "examples/pilecap.py",
+              "src/shapemesh/py.typed",
+          }
+
+          with tarfile.open(sdist) as archive:
+              sdist_entries = {member.name: member for member in archive.getmembers()}
+
+          for suffix in required_sdist:
+              matches = [
+                  member
+                  for name, member in sdist_entries.items()
+                  if name == suffix or name.endswith(f"/{suffix}")
+              ]
+              assert matches, f"{sdist.name} is missing {suffix}"
+              if suffix != "src/shapemesh/py.typed":
+                  assert all(member.size > 0 for member in matches)
+
+          print(f"{wheel.name}: {len(wheel_entries)} entries")
+          print(f"{sdist.name}: {len(sdist_entries)} entries")
+          PY
+
+      - name: Install the built wheel
+        run: uv pip install --python .venv/bin/python --no-deps --force-reinstall dist/*.whl
+
+      - name: Verify the installed wheel
+        run: |
+          uv run --no-sync python - <<'PY'
+          import pathlib
+          import shapemesh
+
+          path = pathlib.Path(shapemesh.__file__).resolve()
+          assert "site-packages" in path.parts, f"imported the source tree instead: {path}"
+          assert shapemesh.__version__ == "0.1.0", shapemesh.__version__
+          print(f"Imported shapemesh {shapemesh.__version__} from {path}")
+          PY
+
+      - name: Run tests against the installed wheel
+        run: uv run --no-sync pytest -q -W error
+
+      - name: Smoke-test the examples
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          for example in "$GITHUB_WORKSPACE"/examples/*.py; do
+            echo "::group::$(basename "$example")"
+            "$GITHUB_WORKSPACE/.venv/bin/python" "$example"
+            echo "::endgroup::"
+          done
+          test -s beam_with_hole.msh
+          test -s frame.msh
+          test -s pilecap.msh
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7

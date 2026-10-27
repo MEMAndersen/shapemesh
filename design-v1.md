@@ -622,7 +622,9 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Runtime dependencies: `numpy`, `gmsh>=4.0`.
 - Dev dependencies: pytest, ruff, pyright.
 - License: LGPL-3.0-or-later, with Gmsh attribution in the README.
-- CI matrix: Python 3.12–3.15 on Linux, macOS, Windows; Gmsh 4.15.2 (set up after the feature branch is squash-merged).
+- CI matrix: Python 3.12–3.15 on Linux, macOS, Windows; Gmsh 4.15.2, with Ruff,
+  Pyright, warnings-as-errors tests, and a distribution build/install gate in
+  `.github/workflows/ci.yml`.
 - Gmsh policy: requires 4.0+; tested with 4.15.2. New element types require a `shapemesh` update.
 - Version: `0.1.0`.
 

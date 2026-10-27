@@ -228,13 +228,16 @@ notice.
 
 ### M14. The specified CI matrix is absent
 
-**Status:** Open release gate; intentionally deferred by the design until after
-the feature-branch merge  
-**Reference:** `design-v1.md:596-608`
+**Status:** Fixed
 
-No CI workflow is tracked. Before tagging, run the specified Python 3.12-3.15
-matrix on Linux, macOS, and Windows with Gmsh 4.15.2. Native Gmsh behavior makes
-the platform coverage particularly important.
+**References:** `.github/workflows/ci.yml`; `design-v1.md` §15
+
+Added a GitHub Actions workflow that runs the suite on Python 3.12–3.15 across
+Linux, macOS, and Windows with Gmsh 4.15.2 pinned by `uv.lock`. The workflow
+also enforces the lockfile, Ruff lint and formatting, Pyright, warnings-as-errors
+tests, and a package gate that builds both distributions, verifies their
+contents and metadata, runs the suite against the installed wheel, and
+smoke-tests the examples.
 
 ### M15. The stated LGPL licensing goal is misleading with mandatory Gmsh
 
@@ -508,3 +511,9 @@ bound were resolved in this block.
   and formatting passed, and Pyright reported 0 errors.
 - 2026-10-27: Audited and closed test-gap item 3. Every H/M finding now has an
   explicit regression test mapping, documented in the release review.
+- 2026-10-27: Fixed M14 by adding `.github/workflows/ci.yml` with the design §15
+  matrix (Python 3.12–3.15 on Linux, macOS, and Windows), Gmsh 4.15.2 pinned
+  through `uv.lock`, lockfile/Ruff/Pyright gates, warnings-as-errors tests, and a
+  distribution build gate that checks archive contents and metadata, runs the
+  suite against the installed wheel, and smoke-tests the examples. Added the
+  Python 3.15 classifier and a CI badge.

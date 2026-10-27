@@ -1,5 +1,7 @@
 # shapemesh
 
+[![CI](https://github.com/MEMAndersen/shapemesh/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MEMAndersen/shapemesh/actions/workflows/ci.yml)
+
 A Gmsh-powered geometry and meshing library: a small, closed set of 0–3D
 shapes, n-ary booleans, and entity-level MSH 4.1 I/O.
 
