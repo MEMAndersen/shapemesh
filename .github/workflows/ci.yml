@@ -216,11 +216,20 @@ jobs:
         run: |
           uv run --no-sync python - <<'PY'
           import pathlib
+          from importlib.metadata import version
+
           import shapemesh
 
           path = pathlib.Path(shapemesh.__file__).resolve()
           assert "site-packages" in path.parts, f"imported the source tree instead: {path}"
-          assert shapemesh.__version__ == "0.1.0", shapemesh.__version__
+
+          # The installed metadata comes from pyproject.toml, so this catches
+          # drift without pinning the version in this workflow.
+          metadata_version = version("shapemesh")
+          assert shapemesh.__version__ == metadata_version, (
+              f"runtime __version__ {shapemesh.__version__!r} does not match "
+              f"installed metadata {metadata_version!r}"
+          )
           print(f"Imported shapemesh {shapemesh.__version__} from {path}")
           PY
 
