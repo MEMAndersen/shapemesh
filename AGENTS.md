@@ -89,7 +89,34 @@ commits and changelogs are written for humans, not machines.
 - Keep the subject to a single line; put the "why" and detail in the body.
 - Lead with `Breaking:` when a change is breaking.
 
+## Remote pushes
+
+Never push commits, tags, or branches to a remote without explicit approval.
+Prepare the commit locally, show it for review, and wait for the user to approve
+the push. Approval applies only to the reviewed changes. Do not rewrite
+published history or force-push without separate explicit approval.
+
 ## Changelog
 
-A `CHANGELOG.md` in Common Changelog format will be started once `0.1.0` is
-finished — not before.
+`CHANGELOG.md` follows [Common Changelog](https://common-changelog.org/) and is
+updated when a release is prepared, not with every commit. Do not add an
+`Unreleased` section.
+
+- Start each release with `## [VERSION] - YYYY-MM-DD` and link the version to
+  its GitHub release with a reference-style link at the bottom of the file.
+- Add a one-sentence italic notice when useful. First releases use
+  `_First release._`.
+- Group changes under `### Changed`, `### Added`, `### Removed`, and
+  `### Fixed`, in that order, and omit empty groups.
+- Write each change in the imperative mood on one line, starting with a verb
+  such as `Add`, `Fix`, `Remove`, or `Refactor`.
+- End each change with one or more Markdown links to the most relevant commits,
+  for example
+  ``([`53bd922`](https://github.com/MEMAndersen/shapemesh/commit/53bd922))``.
+- Add the author after the references, for example `(Mads Kruse)`.
+- Follow [3.4. Merge related changes](https://common-changelog.org/#34-merge-related-changes):
+  merge commits that implement one change and leave out maintenance that does
+  not affect users. Keep the list short.
+- Prefix breaking changes with `**Breaking:**` and list them first.
+- Keep releases latest-first, and tag each release with the same version
+  (`vX.Y.Z`).
