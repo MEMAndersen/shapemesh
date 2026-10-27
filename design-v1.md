@@ -1,6 +1,6 @@
 # ShapeMesh v1 — Design Plan
 
-**Status:** Design locked; no implementation yet  
+**Status:** Implemented; source of truth for v0.1.0  
 **Date:** 2026-10-24  
 **Package:** `shapemesh`  
 **Source:** Python port of the discontinued Rust `geommesh`
@@ -43,7 +43,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 | Area | Decision | Reason |
 |---|---|---|
 | Name | `shapemesh` | Matches repo; PyPI name free as of 2026-10-24 |
-| License | LGPL-3.0-or-later | Copyleft on the library itself without blocking non-GPL downstream users |
+| License | LGPL-3.0-or-later | Copyleft on the library itself; note that the mandatory Gmsh backend is GPL-2.0-or-later, which affects distributed downstream works |
 | Python | `>=3.12` | Modern typing and dataclasses |
 | Shapes | Frozen dataclasses | Positional geometry, keyword-only label; `kw_only=True` also dodges the default-ordering error |
 | Point | 0D shape plus `Vec3` coordinate type | Gmsh 0D entities contain type-15 point elements; avoids label leakage |
@@ -67,7 +67,8 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 ```text
 shapemesh/
 ├── pyproject.toml
-├── LICENSE
+├── COPYING
+├── COPYING.LESSER
 ├── README.md
 ├── AGENTS.md
 ├── design-v1.md
@@ -618,11 +619,11 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Type checking: pyright.
 - Tests: pytest.
 - Python: `>=3.12`.
-- Runtime dependencies: `numpy`, `gmsh>=4.15`.
+- Runtime dependencies: `numpy`, `gmsh>=4.0`.
 - Dev dependencies: pytest, ruff, pyright.
 - License: LGPL-3.0-or-later, with Gmsh attribution in the README.
 - CI matrix: Python 3.12–3.15 on Linux, macOS, Windows; Gmsh 4.15.2 (set up after the feature branch is squash-merged).
-- Gmsh policy: tested with 4.15.2; newer 4.x allowed. New element types require a `shapemesh` update.
+- Gmsh policy: requires 4.0+; tested with 4.15.2. New element types require a `shapemesh` update.
 - Version: `0.1.0`.
 
 ## 16. Roadmap (not v1)
@@ -643,8 +644,8 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 
 ## 17. Open items and assumptions
 
-1. **Cylinder signature** is provisional: `Cylinder(start, end, radius)`, with `axis = end - start`. Alternative: `Cylinder(base, axis, radius, height)`. Confirm before implementation.
-2. **Primitive signatures assumed**: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred; `Circle(center, radius)`, `Ellipse(center, rx, ry)`, `Disk(center, radius)`, `EllipticalDisk(center, rx, ry)` (axis-aligned, any constant z).
+1. **Cylinder signature** is implemented as `Cylinder(start, end, radius)`, with `axis = end - start`.
+2. **Primitive signatures** are implemented as: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred; `Circle(center, radius)`, `Ellipse(center, rx, ry)`, `Disk(center, radius)`, `EllipticalDisk(center, rx, ry)` (axis-aligned, any constant z).
 3. **Boundary orientation**: `EntityRecord.boundary` stores signed tags. Build uses `getBoundary(..., oriented=True)`; the reader preserves signs. If orientation is unknown, empty boundary is allowed.
 4. **Meshless entities**: the reader preserves entities even if they have no elements; the writer requires an `EntityRecord` for every entity referenced by a group.
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.

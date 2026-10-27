@@ -238,20 +238,21 @@ the platform coverage particularly important.
 
 ### M15. The stated LGPL licensing goal is misleading with mandatory Gmsh
 
-**Status:** Open project/licensing question  
-**References:** `design-v1.md:46`, `README.md:43`
+**Status:** Fixed  
+**References:** `design-v1.md:46`, `README.md:68-77`
 
-The design says LGPL was chosen without blocking non-GPL downstream users.
+The design said LGPL was chosen without blocking non-GPL downstream users.
 That is not a safe general claim when the required backend is Gmsh, which is
-GPL-2.0-or-later. Gmsh's official licensing policy requires a different or
-commercial license for integration into distributed closed-source software.
-Clarify downstream obligations and decide whether that goal is actually
-supported. This finding does not challenge the LGPL licensing of shapemesh's
-own code.
+GPL-2.0-or-later. Clarified the downstream obligations:
+- Updated `design-v1.md:46` to note that the mandatory Gmsh backend is
+  GPL-2.0-or-later and affects distributed downstream works.
+- Added a dedicated Gmsh licensing note to `README.md` explaining that
+  shapemesh itself is LGPL-3.0-or-later, while using it in a distributed
+  application brings Gmsh's copyleft obligations into scope.
 
 ### L1. The design source of truth and release documentation are stale
 
-**Status:** Open  
+**Status:** In progress  
 **References:** `AGENTS.md:7-8`; `design-v1.md:3`, `:70`, `:629-630`,
 `:637-646`; `README.md:6`, `:32-33`
 
@@ -259,6 +260,18 @@ The design still says no implementation exists, lists the old single-`LICENSE`
 layout, calls the implemented cylinder signature provisional, and retains
 implementation as future work. The README says examples are coming soon and
 must lose its development status for the release.
+
+**Done so far:**
+- Updated `design-v1.md` status to "Implemented; source of truth for v0.1.0".
+- Replaced `LICENSE` with `COPYING`/`COPYING.LESSER` in the package layout.
+- Updated the Gmsh dependency and version-policy lines to `gmsh>=4.0`.
+- Marked the cylinder signature and primitive signatures as implemented.
+- Rewrote `README.md` with a release-ready structure and a TODO placeholder for
+  the author's personal primer.
+
+**Still to do:**
+- Author fills in the personal primer in `README.md`.
+- Final review of the README tone and accuracy before release.
 
 ### L2. `COPYING` omits the canonical GPL application appendix
 
