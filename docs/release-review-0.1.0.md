@@ -343,9 +343,30 @@ classes, functions, methods, and properties against `AGENTS.md`.
 2. ~~Strengthen existing round-trips, which mostly compare counts rather than
    full mesh and entity fidelity.~~ Done for the build-to-MSH, minimal-MSH, and
    Gmsh-generated round-trips.
-3. Add regressions for every corrected finding, including higher-order
+3. ~~Add regressions for every corrected finding, including higher-order
    generation, option isolation and conflicts, `rx < ry`, empty blocks,
-   malformed input, and numeric boundaries.
+   malformed input, and numeric boundaries.~~ Done. Each H/M finding now has an
+   explicit regression test or is covered by a dedicated test module:
+   - H1: `test_order_controls_generated_element_types`
+   - H2: `test_parametric_nodes_rejected`
+   - M1: `test_ellipse_with_y_major_axis`
+   - M2: `test_preinitialized_gmsh_options_are_restored`
+   - M3: `test_advanced_options_cannot_override_explicit_settings`
+   - M4: `test_point_only_high_order_meshing`
+   - M5: `test_positive_shape_dimensions_validate_converted_float`,
+     `test_element_size_validates_converted_float`
+   - M6: `test_polygon_rejects_repeated_nonconsecutive_vertices`
+   - M7: `test_physical_group_backslashes_roundtrip`
+   - M8: `test_physical_names_count_validated`,
+     `test_node_tag_summary_validated`,
+     `test_element_counts_and_tag_summary_validated`
+   - M9: `test_malformed_msh_raises_format_error`,
+     `test_binary_msh_rejected_before_decoding`,
+     `test_invalid_utf8_raises_format_error`
+   - M10: `test_empty_element_block_roundtrip`
+   - M11: `test_writer_rejects_invalid_group_membership`,
+     `test_writer_rejects_unknown_element_type`,
+     `test_writer_rejects_inconsistent_connectivity`
 4. ~~Complete boolean volume assertions, true n-ary geometric semantics, and
    labeled-primitive coverage required by the design. Targeted checks during
    the review produced the expected union/intersection/difference volumes, but
@@ -472,3 +493,5 @@ bound were resolved in this block.
   tests to compare node tags/coordinates and element-block keys, tags, and
   connectivity. Policy-and-roundtrip verification: 128 tests passed, Ruff lint
   and formatting passed, and Pyright reported 0 errors.
+- 2026-10-27: Audited and closed test-gap item 3. Every H/M finding now has an
+  explicit regression test mapping, documented in the release review.
