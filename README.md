@@ -5,11 +5,17 @@
 A Gmsh-powered geometry and meshing library: a small, closed set of 0–3D
 shapes, n-ary booleans, and entity-level MSH 4.1 I/O.
 
-> **Status:** v0.1.0 — first release in progress.
+> **Status:** v0.1.0 — initial release.
 
 ## Why shapemesh?
 
-shapemesh is an easy to use "wrapper" for the powerful Gmsh meshing library. The process of creating complex geometries and meshing them has been simplified into three steps. Create primitive 1d to 3d shapes using the `Shape` primitives, this could for instance be a `Line`, a `Polygon`, or a `Box`, the primitive shapes can combined into more complex shapes using boolean operations such as `Union`. When a shape is created it can be labelled, this label makes sure that when the mesh is created using the `build()` function, the specific elements that this shape consists of can be queried using the label.
+shapemesh is an easy-to-use wrapper for the powerful Gmsh meshing library. It
+simplifies creating complex geometries and meshing them into three steps:
+create primitive 1D to 3D shapes using the `Shape` primitives — for example a
+`Line`, `Polygon`, or `Box`; combine them into more complex shapes with boolean
+operations such as `Union`; and label them. Labels become Gmsh physical groups,
+so after calling `build()` you can query the elements belonging to each labelled
+shape.
 
 ## Features
 
@@ -81,24 +87,24 @@ manual entity bookkeeping.
 ## Examples
 
 Structural examples covering 1D, 2D, and 3D workflows live in
-[`examples/`](examples/):
+[`examples/`](https://github.com/MEMAndersen/shapemesh/tree/main/examples):
 
-- [`examples/beam_with_hole.py`](examples/beam_with_hole.py)
-- [`examples/frame.py`](examples/frame.py)
-- [`examples/pilecap.py`](examples/pilecap.py)
+- [`examples/beam_with_hole.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/beam_with_hole.py)
+- [`examples/frame.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/frame.py)
+- [`examples/pilecap.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/pilecap.py)
 
 ## Documentation
 
-- [Design baseline](design-v1.md)
-- [Labels and physical groups](docs/labels.md)
-- [Thread safety](docs/threading.md)
-- [Gmsh version policy](docs/version-policy.md)
+- [Design baseline](https://github.com/MEMAndersen/shapemesh/blob/main/design-v1.md)
+- [Labels and physical groups](https://github.com/MEMAndersen/shapemesh/blob/main/docs/labels.md)
+- [Thread safety](https://github.com/MEMAndersen/shapemesh/blob/main/docs/threading.md)
+- [Gmsh version policy](https://github.com/MEMAndersen/shapemesh/blob/main/docs/version-policy.md)
 
 ## License
 
 shapemesh is licensed under the **GNU Lesser General Public License v3 or later**
-(LGPL-3.0-or-later). See [`COPYING`](COPYING) and
-[`COPYING.LESSER`](COPYING.LESSER) for the full texts.
+(LGPL-3.0-or-later). See [`COPYING`](https://github.com/MEMAndersen/shapemesh/blob/main/COPYING) and
+[`COPYING.LESSER`](https://github.com/MEMAndersen/shapemesh/blob/main/COPYING.LESSER) for the full texts.
 
 **Note on Gmsh:** shapemesh itself is LGPL-3.0-or-later. It requires Gmsh as a
 runtime dependency, and Gmsh is licensed under GPL-2.0-or-later. If you

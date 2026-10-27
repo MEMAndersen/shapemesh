@@ -14,9 +14,9 @@ be addressed or consciously accepted before tagging 0.1.0.
 
 - **H1 — High:** element order is not applied during generation. **Fixed.**
 - **H2 — High:** parametric node blocks silently corrupt coordinates. **Fixed.**
-- **H3 — High release hazard:** stale distributions. **Resolved externally:**
-  the user deleted the old `dist/`; clean release artifacts still need to be built
-  from the final release commit.
+- **H3 — High release hazard:** stale distributions. **Open release gate:**
+  the old `dist/` was deleted; clean release artifacts still need to be built and
+  verified from the final release commit.
 - All other findings remain open unless their status is changed below.
 
 ## High-severity findings
@@ -55,8 +55,9 @@ Required remediation:
 
 ### H3. Existing distributions were stale and unsafe to publish
 
-**Status:** Resolved externally; final artifact verification remains a release
-step  
+**Status:** Open release gate; the old artifacts were deleted, and final
+artifact verification remains a release step
+
 **References:** former `dist/shapemesh-0.1.0-py3-none-any.whl` and
 `dist/shapemesh-0.1.0.tar.gz`
 
@@ -255,26 +256,30 @@ GPL-2.0-or-later. Clarified the downstream obligations:
 
 ### L1. The design source of truth and release documentation are stale
 
-**Status:** In progress  
+**Status:** Fixed
+
 **References:** `AGENTS.md:7-8`; `design-v1.md:3`, `:70`, `:629-630`,
 `:637-646`; `README.md:6`, `:32-33`
 
-The design still says no implementation exists, lists the old single-`LICENSE`
-layout, calls the implemented cylinder signature provisional, and retains
-implementation as future work. The README says examples are coming soon and
-must lose its development status for the release.
+The design still said no implementation existed, listed the old
+single-`LICENSE` layout, called the implemented cylinder signature provisional,
+and retained implementation as future work. The README said examples were
+coming soon and needed to lose its development status for the release.
 
-**Done so far:**
+**Resolution:**
 - Updated `design-v1.md` status to "Implemented; source of truth for v0.1.0".
 - Replaced `LICENSE` with `COPYING`/`COPYING.LESSER` in the package layout.
 - Updated the Gmsh dependency and version-policy lines to `gmsh>=4.0`.
 - Marked the cylinder signature and primitive signatures as implemented.
-- Rewrote `README.md` with a release-ready structure and a TODO placeholder for
-  the author's personal primer.
-
-**Still to do:**
-- Author fills in the personal primer in `README.md`.
-- Final review of the README tone and accuracy before release.
+- Rewrote `README.md` with a release-ready structure.
+- Removed the in-progress release status and completed the final tone and
+  accuracy review.
+- Replaced repository-relative README links with absolute GitHub URLs so they
+  render correctly on PyPI.
+- Added Homepage, Repository, Issues, and Documentation URLs to
+  `pyproject.toml`.
+- Dropped the personal-primer placeholder; a personal primer is not part of the
+  0.1.0 scope.
 
 ### L2. `COPYING` omits the canonical GPL application appendix
 
@@ -404,7 +409,12 @@ bound were resolved in this block.
 - Offline wheel/sdist build: passed.
 - All three examples ran successfully.
 - Runtime verification used Windows, Python 3.13.2, Gmsh 4.15.2, and NumPy
-  2.5.4. Other support-matrix combinations remain unverified.
+  2.5.4. Other support-matrix combinations were unverified at the time of the
+  original review.
+
+**Post-remediation verification:** CI now runs all 12 Python/OS combinations
+with warnings-as-errors tests and a package gate. The workflow is green on
+`main`.
 
 ## Remediation log
 
@@ -518,3 +528,8 @@ bound were resolved in this block.
   suite against the installed wheel, and smoke-tests the examples. Added the
   Python 3.15 classifier and a CI badge. The first run on `main` passed all 14
   jobs: <https://github.com/MEMAndersen/shapemesh/actions/runs/40567585907>.
+- 2026-10-27: Fixed L1 by finalizing the release README: removed the in-progress
+  status, completed the tone and accuracy review, replaced repository-relative
+  links with absolute GitHub URLs, and documented that the personal primer is
+  not part of 0.1.0. Added PyPI project URLs to `pyproject.toml`. H3 remains open
+  pending final artifact verification.
