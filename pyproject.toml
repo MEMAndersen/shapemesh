@@ -1,6 +1,6 @@
 [project]
 name = "shapemesh"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A Gmsh-powered geometry and meshing library: a closed set of 0-3D shapes, n-ary booleans, and MSH 4.1 I/O."
 readme = "README.md"
 authors = [
@@ -37,6 +37,9 @@ Documentation = "https://github.com/MEMAndersen/shapemesh/tree/main/docs"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/shapemesh/__init__.py"
 
 [tool.ruff]
 line-length = 100

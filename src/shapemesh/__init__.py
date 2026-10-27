@@ -60,6 +60,7 @@ from .shapes import (
     Vec3Like,
 )
 
+# Hatchling reads this value; keep it as the single source of truth.
 __version__ = "0.1.0"
 
 __all__ = [

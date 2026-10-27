@@ -223,8 +223,8 @@ jobs:
           path = pathlib.Path(shapemesh.__file__).resolve()
           assert "site-packages" in path.parts, f"imported the source tree instead: {path}"
 
-          # The installed metadata comes from pyproject.toml, so this catches
-          # drift without pinning the version in this workflow.
+          # Hatchling generates the installed metadata from the package version,
+          # so this catches drift without pinning the version in this workflow.
           metadata_version = version("shapemesh")
           assert shapemesh.__version__ == metadata_version, (
               f"runtime __version__ {shapemesh.__version__!r} does not match "
