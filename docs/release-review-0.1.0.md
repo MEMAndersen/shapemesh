@@ -336,19 +336,19 @@ classes, functions, methods, and properties against `AGENTS.md`.
 
 ## Important missing tests
 
-1. Add the design section 9.5 overlapping-label round-trip: two overlapping
+1. ~~Add the design section 9.5 overlapping-label round-trip: two overlapping
    labeled boxes, shapemesh write, Gmsh reopen, then shapemesh reopen. Verify
    both memberships, multiple physical tags, connectivity, coordinates, and
-   signed boundaries.
+   signed boundaries.~~ Done.
 2. Strengthen existing round-trips, which mostly compare counts rather than
    full mesh and entity fidelity.
 3. Add regressions for every corrected finding, including higher-order
    generation, option isolation and conflicts, `rx < ry`, empty blocks,
    malformed input, and numeric boundaries.
-4. Complete boolean volume assertions, true n-ary geometric semantics, and
+4. ~~Complete boolean volume assertions, true n-ary geometric semantics, and
    labeled-primitive coverage required by the design. Targeted checks during
    the review produced the expected union/intersection/difference volumes, but
-   those results are not protected by the suite.
+   those results are not protected by the suite.~~ Done.
 
 ## Open questions before freezing the API
 
@@ -456,3 +456,14 @@ classes, functions, methods, and properties against `AGENTS.md`.
   `dimension` properties. The public-method docstring check now passes. L6-L8
   verification: 118 tests passed, Ruff lint and formatting passed, and Pyright
   reported 0 errors.
+- 2026-10-27: Added the design §9.5 overlapping-group round-trip: build two
+  overlapping labeled boxes, write MSH 4.1, reopen with Gmsh to verify three
+  volume pieces and shared physical-group membership, then reopen with
+  `Mesh.read_msh` and verify entity count, group intersection, element-block
+  keys, and physical-group membership of the overlap entity.
+- 2026-10-27: Added boolean geometric-semantics tests: union/intersection/
+  difference volumes on overlapping boxes, box-minus-sphere volume ≈ 0.966, and
+  a nested `(a - b) + c` union. Added labeled-primitive coverage for point,
+  polyline, polygon, disk, sphere, and cylinder. Test-coverage verification:
+  128 tests passed, Ruff lint and formatting passed, and Pyright reported 0
+  errors.
