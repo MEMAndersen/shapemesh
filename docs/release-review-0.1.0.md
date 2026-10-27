@@ -516,4 +516,5 @@ bound were resolved in this block.
   through `uv.lock`, lockfile/Ruff/Pyright gates, warnings-as-errors tests, and a
   distribution build gate that checks archive contents and metadata, runs the
   suite against the installed wheel, and smoke-tests the examples. Added the
-  Python 3.15 classifier and a CI badge.
+  Python 3.15 classifier and a CI badge. The first run on `main` passed all 14
+  jobs: <https://github.com/MEMAndersen/shapemesh/actions/runs/40567585907>.
