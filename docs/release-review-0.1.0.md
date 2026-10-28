@@ -14,10 +14,10 @@ be addressed or consciously accepted before tagging 0.1.0.
 
 - **H1 — High:** element order is not applied during generation. **Fixed.**
 - **H2 — High:** parametric node blocks silently corrupt coordinates. **Fixed.**
-- **H3 — High release hazard:** stale distributions. **Open release gate:**
-  the old `dist/` was deleted; clean release artifacts still need to be built and
-  verified from the final release commit.
-- All other findings remain open unless their status is changed below.
+- **H3 — High release hazard:** stale distributions. **Fixed.** Fresh 0.1.0
+  wheel and sdist passed `twine check --strict`, archive inspection, and a
+  clean-environment wheel install.
+- All findings are fixed.
 
 ## High-severity findings
 
@@ -55,11 +55,10 @@ Required remediation:
 
 ### H3. Existing distributions were stale and unsafe to publish
 
-**Status:** Open release gate; the old artifacts were deleted, and final
-artifact verification remains a release step
+**Status:** Fixed
 
 **References:** former `dist/shapemesh-0.1.0-py3-none-any.whl` and
-`dist/shapemesh-0.1.0.tar.gz`
+`dist/shapemesh-0.1.0.tar.gz`; current `dist/` artifacts
 
 The old archives exported `Cube` rather than `Box`, contained an obsolete README
 and primitive set, omitted newer examples, and included only the old `LICENSE`
@@ -68,8 +67,15 @@ instead of `COPYING` and `COPYING.LESSER`.
 The user deleted these artifacts after the review. A fresh build from the
 reviewed source contained the current API and both license files, so this was a
 stale-artifact problem rather than a current Hatchling license-configuration
-problem. Build both distributions from the exact final release commit into an
-empty `dist/` and inspect them before upload.
+problem.
+
+Resolution: fresh 0.1.0 wheel and sdist were built from the final release source
+into an empty `dist/`. Both passed `uvx twine check --strict`. Archive inspection
+confirmed version 0.1.0, `py.typed`, `COPYING`, `COPYING.LESSER`, `README.md`,
+`CHANGELOG.md`, all three examples, the PyPI project URLs, and no stale `Cube`
+export. The wheel was then installed and exercised successfully in a clean
+environment. The `dist/.gitignore` file written by `uv build` is not a
+distribution and must be excluded from Twine's file arguments.
 
 ## Medium-severity geometry and settings findings
 
@@ -531,5 +537,10 @@ with warnings-as-errors tests and a package gate. The workflow is green on
 - 2026-10-27: Fixed L1 by finalizing the release README: removed the in-progress
   status, completed the tone and accuracy review, replaced repository-relative
   links with absolute GitHub URLs, and documented that the personal primer is
-  not part of 0.1.0. Added PyPI project URLs to `pyproject.toml`. H3 remains open
-  pending final artifact verification.
+  not part of 0.1.0. Added PyPI project URLs to `pyproject.toml`. H3 remained
+  open pending final artifact verification.
+- 2026-10-28: Fixed H3 by verifying the fresh 0.1.0 wheel and sdist with
+  `uvx twine check --strict` and inspecting their contents and metadata. The
+  wheel contained `py.typed` and both license files, the sdist contained the
+  current documentation, licenses, and examples, neither archive contained the
+  stale `Cube` API, and the wheel installed and ran in a clean environment.
