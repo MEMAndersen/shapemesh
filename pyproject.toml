@@ -41,6 +41,21 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 path = "src/shapemesh/__init__.py"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.release-check/**",
+    "/.venv/**",
+    "/venv/**",
+    "/build/**",
+    "/dist/**",
+    "**/__pycache__/**",
+    "**/*.py[cod]",
+    "**/.pytest_cache/**",
+    "**/.mypy_cache/**",
+    "**/.ruff_cache/**",
+    "**/*.egg-info/**",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

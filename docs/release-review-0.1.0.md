@@ -75,7 +75,9 @@ confirmed version 0.1.0, `py.typed`, `COPYING`, `COPYING.LESSER`, `README.md`,
 `CHANGELOG.md`, all three examples, the PyPI project URLs, and no stale `Cube`
 export. The wheel was then installed and exercised successfully in a clean
 environment. The `dist/.gitignore` file written by `uv build` is not a
-distribution and must be excluded from Twine's file arguments.
+distribution and must be excluded from Twine's file arguments. The sdist
+configuration also excludes local virtual environments and build caches so
+scratch directories cannot leak into release artifacts.
 
 ## Medium-severity geometry and settings findings
 
@@ -544,3 +546,7 @@ with warnings-as-errors tests and a package gate. The workflow is green on
   wheel contained `py.typed` and both license files, the sdist contained the
   current documentation, licenses, and examples, neither archive contained the
   stale `Cube` API, and the wheel installed and ran in a clean environment.
+- 2026-10-28: Excluded local virtual environments and build caches from the
+  sdist after the `.release-check` environment expanded the archive from 35
+  files to 1,954 (53 MB). The rebuilt sdist contains the expected 35 files and
+  both artifacts still pass Twine.
