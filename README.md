@@ -86,12 +86,13 @@ manual entity bookkeeping.
 
 ## Examples
 
-Structural examples covering 1D, 2D, and 3D workflows live in
+Examples covering structural workflows and element-node data access live in
 [`examples/`](https://github.com/MEMAndersen/shapemesh/tree/main/examples):
 
 - [`examples/beam_with_hole.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/beam_with_hole.py)
 - [`examples/frame.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/frame.py)
 - [`examples/pilecap.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/pilecap.py)
+- [`examples/element_coordinates.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/element_coordinates.py)
 
 ## Documentation
 
