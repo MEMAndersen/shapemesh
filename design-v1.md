@@ -164,7 +164,7 @@ mesh.groups
 mesh.metadata
 ```
 
-- Public numpy arrays are read-only views.
+- Public mesh-storage numpy arrays are read-only views. Node lookup methods return new writable arrays; see §7.4.
 - v1 has no mutation methods.
 - `physical_group(name)` alone is ambiguous across dimensions; require `dim` or use `physical_groups_named(name)`.
 - `elements_in_group(name, dim)` may return the same `ElementBlock` for multiple groups when groups overlap.
@@ -316,11 +316,32 @@ class Mesh:
 - `num_nodes`, `num_elements`, and `bbox` are derived `Mesh` properties.
 - `ElementBlock` keys are `(entity_dim, entity_tag, ElementType)`; duplicate blocks on read are merged.
 - `ElementBlock.connectivity` stores global node tags, not zero-based indices.
-- All public arrays are set non-writeable and exposed read-only.
+- All public mesh-storage arrays are set non-writeable and exposed read-only; lookup query results are writable copies.
 - `NodeTable`/`ElementBlock` use `eq=False` (and thus `__hash__ = None`): the default dataclass `__eq__` would compare ndarray fields with `==`, raising on ambiguous truth values.
 - `EntityRecord.bbox` uses six values even for points; the writer emits three coordinates for dim 0.
 
-### 7.4 `to_numpy()`
+### 7.4 Node tag lookup
+
+```python
+mesh.nodes.indices_for(tags)
+mesh.nodes.coords_for(tags)
+```
+
+- Node tags are identifiers, not array indices; neither contiguous nor ordered tags are assumed.
+- `indices_for` accepts an integer scalar or an arbitrarily shaped integer array-like. Scalar and 0-D input return a Python `int`; other input returns a writable `np.intp` array with the same shape. Query order and duplicate query tags are preserved.
+- `coords_for` follows the same input rules and returns a new writable array with shape `(3,)` for scalar input or `tags.shape + (3,)` otherwise. In particular, an `(M, k)` connectivity query materializes `M * k * 3` coordinate values.
+- Non-integer values, including booleans and integral-valued floats, raise `TypeError`. Empty queries return empty arrays with the appropriate shape. Missing, negative, and out-of-range tags raise `KeyError` listing up to five missing tags. There is no missing-tag ignore mode.
+- Lookup is built lazily on first use and cached on `NodeTable`; `Mesh` adds no wrappers. Concurrent cache construction is a benign race because all results are identical.
+- All node-aligned arrays are frozen by `NodeTable.__post_init__`, including standalone tables not yet owned by a `Mesh`.
+- `read_msh()` validates node-tag uniqueness immediately and raises `MeshFormatError`. A manually constructed `NodeTable` detects duplicates while building its first lookup and raises `ValueError`.
+- The cached strategy is selected in this order:
+  1. **Contiguous:** empty tags or strictly ascending tags with unit stride. Lookup is `tag - first_tag`; no auxiliary arrays are cached.
+  2. **Direct address:** non-negative tags with `range_size <= 4 * N` and an index allocation of at most 64 MiB. The table is offset by `min_tag`, filled with `-1` for gaps, and uses `int32` rows when `N < 2**31` and `int64` otherwise. Lookup is O(1).
+  3. **Sorted search:** all other layouts. Already ascending tags are reused directly; otherwise an `argsort` permutation and sorted copy are cached. Lookup uses `searchsorted` and verifies the tag, costing O(log N) per query.
+- Array results are writable because they are new query results, not views of immutable mesh storage. Cached lookup arrays remain private and read-only.
+- `to_numpy()`, connectivity semantics, and writer-side dangling-tag validation are unchanged.
+
+### 7.5 `to_numpy()`
 
 ```python
 @dataclass(frozen=True, slots=True, eq=False)
@@ -341,7 +362,7 @@ class NumpyMesh:
 - Views are read-only; callers copy if they need mutable arrays.
 - `blocks` is keyed by `ElementType` only, so blocks from distinct entities of the same type are merged and entity association is lost; this view is for numerics, not entity queries.
 
-### 7.5 Element types
+### 7.6 Element types
 
 `ElementType` is a static, hand-curated `IntEnum` listing only the fixed-node element types `shapemesh` supports. It is *not* auto-generated from `getElementProperties`: a mechanical dump would include variable-node types (Polygon 34, Polyhedron 35, `num_nodes == 0`) that cannot fit the fixed-width `(M, k)` connectivity.
 
@@ -371,7 +392,7 @@ Common members:
 
 The table includes the higher-order fixed-node types (e.g. 92 = Hexahedron 64, 93 = Hexahedron 125). Variable-node types (Polygon/Polyhedron) are excluded. Unknown type codes are tolerated on read (see §9.3) but rejected by the writer and the `ElementType`-keyed API. A Gmsh update that introduces a new type requires a library update to the enum.
 
-### 7.6 Settings
+### 7.7 Settings
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -607,6 +628,8 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - MSH4 roundtrip through Gmsh and through `Mesh.read_msh`.
 - Unknown element type tolerance test (reader skips unknown types; writer rejects them).
 - Read-only array test.
+- Node lookup tests for scalar, empty, 1-D, and `(M, k)` queries; all three strategies; memory thresholds; cache reuse; missing and duplicate tags; strict input types; frozen inputs; and coordinate copy semantics.
+- `benchmarks/node_lookup.py` is a manual, non-CI benchmark covering contiguous, unsorted contiguous, mildly sparse, highly sparse, and random-order tags at `1e3`, `1e5`, `1e6`, and `1e7` nodes with scalar and `1`/`1e3`/`1e6`-tag queries. Run the full matrix with `uv run python benchmarks/node_lookup.py` or a small smoke run with `--quick`.
 - Main-thread-only build guard (worker thread without Gmsh raises a clear error); worker-thread builds with Gmsh pre-initialized serialize.
 - Settings validation and `with_` test.
 - `.msh` re-open roundtrip.

@@ -27,11 +27,12 @@ from __future__ import annotations
 import shlex
 import warnings
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .errors import MeshFormatError
 
@@ -156,6 +157,12 @@ _CODE_TO_TYPE: dict[int, ElementType] = {int(t): t for t in ElementType}
 # -- data structures -------------------------------------------------------
 
 
+_DENSE_LOOKUP_MAX_RATIO = 4
+_DENSE_LOOKUP_MAX_BYTES = 64 * 1024**2
+_INT64_MIN = int(np.iinfo(np.int64).min)
+_INT64_MAX = int(np.iinfo(np.int64).max)
+
+
 @dataclass(frozen=True, slots=True)
 class EntityRecord:
     """A topological entity: dimension, tag, bounding box, and boundary.
@@ -176,9 +183,49 @@ class EntityRecord:
         return f"EntityRecord(dim={self.dim}, tag={self.tag})"
 
 
+@dataclass(frozen=True, slots=True)
+class _NodeLookup:
+    strategy: str
+    first_tag: int = 0
+    min_tag: int = 0
+    max_tag: int = 0
+    direct: np.ndarray | None = None
+    sorted_tags: np.ndarray | None = None
+    order: np.ndarray | None = None
+
+    def resolve(self, tags: np.ndarray, node_count: int) -> tuple[np.ndarray, np.ndarray]:
+        if self.strategy == "contiguous":
+            rows = tags - self.first_tag
+            missing = (tags < 0) | (rows < 0) | (rows >= node_count)
+            return rows.astype(np.intp, copy=False), missing
+
+        if self.strategy == "direct":
+            assert self.direct is not None
+            in_range = (tags >= 0) & (tags >= self.min_tag) & (tags <= self.max_tag)
+            safe_tags = np.where(in_range, tags, self.min_tag)
+            offsets = (safe_tags - self.min_tag).astype(np.intp, copy=False)
+            rows = self.direct[offsets]
+            missing = ~in_range | (rows < 0)
+            return rows.astype(np.intp, copy=False), missing
+
+        assert self.sorted_tags is not None
+        positions = np.searchsorted(self.sorted_tags, tags)
+        missing = (tags < 0) | (positions >= node_count)
+        if node_count == 0:
+            return positions, missing
+        safe_positions = np.minimum(positions, node_count - 1)
+        missing |= self.sorted_tags[safe_positions] != tags
+        rows = positions if self.order is None else self.order[safe_positions]
+        return rows.astype(np.intp, copy=False), missing
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class NodeTable:
     """The global node table: tags, coordinates, and entity classification.
+
+    Node tags are identifiers, not row indices. Use `NodeTable.indices_for` or
+    `NodeTable.coords_for` to resolve them. All node-aligned arrays are frozen
+    at construction.
 
     Args:
         tags: Node tags, shape ``(N,)``.
@@ -191,9 +238,78 @@ class NodeTable:
     coords: np.ndarray  # (N, 3) float
     entity_dim: np.ndarray | None = None  # (N,) int, -1 if unknown
     entity_tag: np.ndarray | None = None
+    _lookup: _NodeLookup | None = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        _freeze(self.tags)
+        _freeze(self.coords)
+        if self.entity_dim is not None:
+            _freeze(self.entity_dim)
+        if self.entity_tag is not None:
+            _freeze(self.entity_tag)
 
     def __repr__(self) -> str:
         return f"NodeTable(nodes={int(self.tags.shape[0])})"
+
+    def _get_lookup(self) -> _NodeLookup:
+        lookup = self._lookup
+        if lookup is None:
+            lookup = _build_node_lookup(self.tags)
+            object.__setattr__(self, "_lookup", lookup)
+        return lookup
+
+    def indices_for(self, tags: ArrayLike) -> int | np.ndarray:
+        """Return zero-based row indices corresponding to node tags.
+
+        Args:
+            tags: An integer node tag or an arbitrarily shaped integer
+                array-like of node tags.
+
+        Returns:
+            A Python ``int`` for scalar input; otherwise a writable array with
+            the input shape and dtype ``np.intp``. Query order and duplicate
+            tags are preserved.
+
+        Raises:
+            TypeError: If a non-empty query contains non-integer tags.
+            KeyError: If any requested tag is missing or negative.
+            ValueError: If the node table contains duplicate tags.
+        """
+        original, query, scalar = _normalize_node_query(tags)
+        lookup = self._get_lookup()
+        if query.size == 0:
+            return np.empty(query.shape, dtype=np.intp)
+        rows, missing = lookup.resolve(query, len(self.tags))
+        if np.any(missing):
+            _raise_missing_node_tags(original, missing)
+        if scalar:
+            return int(rows.item())
+        return rows
+
+    def coords_for(self, tags: ArrayLike) -> np.ndarray:
+        """Return a copy of the coordinates corresponding to node tags.
+
+        Scalar input returns shape ``(3,)``. Array input returns shape
+        ``tags.shape + (3,)``; large connectivity queries therefore materialize
+        one coordinate triplet per requested tag.
+
+        Args:
+            tags: An integer node tag or an arbitrarily shaped integer
+                array-like of node tags.
+
+        Returns:
+            A new, writable coordinate array. Modifying it does not modify the
+            node table.
+
+        Raises:
+            TypeError: If a non-empty query contains non-integer tags.
+            KeyError: If any requested tag is missing or negative.
+            ValueError: If the node table contains duplicate tags.
+        """
+        rows = self.indices_for(tags)
+        if isinstance(rows, int):
+            return self.coords[rows].copy()
+        return self.coords[rows]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -311,6 +427,85 @@ def _freeze(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+def _normalize_node_query(tags: ArrayLike) -> tuple[np.ndarray, np.ndarray, bool]:
+    try:
+        original = np.asarray(tags)
+    except (TypeError, ValueError) as exc:
+        raise TypeError("node tags must be an integer scalar or array-like") from exc
+    scalar = original.ndim == 0
+    if original.size == 0:
+        return original, np.empty(original.shape, dtype=np.int64), scalar
+
+    if original.dtype == np.dtype(object):
+        values = original.ravel()
+        if not all(
+            isinstance(value, (int, np.integer)) and not isinstance(value, (bool, np.bool_))
+            for value in values
+        ):
+            raise TypeError("node tags must contain only integers")
+        query = np.empty(original.shape, dtype=np.int64)
+        for index, value in enumerate(values):
+            integer = int(value)
+            query.flat[index] = integer if _INT64_MIN <= integer <= _INT64_MAX else -1
+        return original, query, scalar
+
+    if not np.issubdtype(original.dtype, np.integer):
+        raise TypeError("node tags must contain only integers")
+    if np.issubdtype(original.dtype, np.unsignedinteger):
+        too_large = original > _INT64_MAX
+        query = original.astype(np.int64)
+        query[too_large] = -1
+        return original, query, scalar
+    return original, original.astype(np.int64, copy=False), scalar
+
+
+def _build_node_lookup(tags: np.ndarray) -> _NodeLookup:
+    node_count = len(tags)
+    if node_count == 0:
+        return _NodeLookup("contiguous")
+    if node_count == 1 or bool(np.all((tags[1:] - tags[:-1] == 1) & (tags[1:] > tags[:-1]))):
+        return _NodeLookup("contiguous", first_tag=int(tags[0]))
+
+    min_tag = int(tags.min())
+    max_tag = int(tags.max())
+    range_size = max_tag - min_tag + 1
+    index_dtype = np.dtype(np.int32 if node_count < 2**31 else np.int64)
+    if (
+        min_tag >= 0
+        and range_size <= _DENSE_LOOKUP_MAX_RATIO * node_count
+        and range_size * index_dtype.itemsize <= _DENSE_LOOKUP_MAX_BYTES
+    ):
+        direct = np.full(range_size, -1, dtype=index_dtype)
+        direct[tags - min_tag] = np.arange(node_count, dtype=index_dtype)
+        if np.count_nonzero(direct >= 0) != node_count:
+            raise ValueError("node tags must be unique")
+        return _NodeLookup(
+            "direct",
+            min_tag=min_tag,
+            max_tag=max_tag,
+            direct=_freeze(direct),
+        )
+
+    if bool(np.all(tags[1:] > tags[:-1])):
+        return _NodeLookup("sorted", sorted_tags=tags)
+
+    order = np.argsort(tags)
+    sorted_tags = tags[order]
+    if np.any(sorted_tags[1:] == sorted_tags[:-1]):
+        raise ValueError("node tags must be unique")
+    return _NodeLookup(
+        "sorted",
+        sorted_tags=_freeze(sorted_tags),
+        order=_freeze(order),
+    )
+
+
+def _raise_missing_node_tags(original: np.ndarray, missing: np.ndarray) -> None:
+    missing_tags = original.ravel()[missing.ravel()]
+    preview = missing_tags[:5].tolist()
+    raise KeyError(f"node tags not found: {preview}")
+
+
 def _iter_tokens(body: list[str]) -> Iterator[str]:
     for line in body:
         yield from line.split()
@@ -360,6 +555,17 @@ def _validate_tag_summary(
             f"{section} declares tag range {declared_min}..{declared_max}, "
             f"but parsed {actual_min}..{actual_max}"
         )
+
+
+def _validate_unique_node_tags(tags: np.ndarray) -> None:
+    if tags.size < 2:
+        return
+    sorted_tags = np.sort(tags)
+    duplicate_mask = sorted_tags[1:] == sorted_tags[:-1]
+    if np.any(duplicate_mask):
+        duplicates = sorted_tags[:-1][duplicate_mask]
+        preview = duplicates[:5].tolist()
+        raise MeshFormatError(f"$Nodes contains duplicate node tags: {preview}")
 
 
 def _read_bbox(it: Iterator[str]) -> tuple[float, float, float, float, float, float]:
@@ -543,8 +749,10 @@ def _parse_nodes(body: list[str]) -> NodeTable:
         etags.extend([tag] * n)
     _reject_extra_tokens(it, "$Nodes")
     _validate_tag_summary("$Nodes", tags, n_nodes, min_node_tag, max_node_tag)
+    tag_array = np.array(tags, dtype=np.int64)
+    _validate_unique_node_tags(tag_array)
     return NodeTable(
-        np.array(tags, dtype=np.int64),
+        tag_array,
         np.array(coords, dtype=np.float64).reshape(-1, 3),
         np.array(dims, dtype=np.int64),
         np.array(etags, dtype=np.int64),
