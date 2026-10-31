@@ -26,10 +26,11 @@ from __future__ import annotations
 
 import shlex
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
+from types import MappingProxyType
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -37,15 +38,15 @@ from numpy.typing import ArrayLike
 from .errors import MeshFormatError
 
 __all__ = [
+    "BlockSlice",
     "ElementBlock",
     "ElementType",
     "EntityRecord",
     "Mesh",
     "MeshMetadata",
     "NodeTable",
-    "NumpyElementBlock",
-    "NumpyMesh",
     "PhysicalGroup",
+    "TypeBlockView",
 ]
 
 
@@ -383,40 +384,44 @@ class MeshMetadata:
         )
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class NumpyElementBlock:
-    """A numpy-view element block with 0-based index connectivity.
+@dataclass(frozen=True, slots=True)
+class BlockSlice:
+    """The slice of a flat element-type view belonging to one entity block.
 
     Args:
-        connectivity: Shape ``(M, k)``; 0-based indices into ``coords``.
-        node_tags: Shape ``(M, k)``; the original Gmsh node tags.
+        entity_dim: The owning entity dimension.
+        entity_tag: The owning entity tag.
+        start: The first row in the flat view, inclusive.
+        stop: The last row in the flat view, exclusive.
     """
 
-    connectivity: np.ndarray  # (M, k) int, 0-based indices into coords
-    node_tags: np.ndarray  # (M, k) int, original Gmsh tags
+    entity_dim: int
+    entity_tag: int
+    start: int
+    stop: int
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class TypeBlockView:
+    """A flat, read-only view of all element blocks of one type.
+
+    Args:
+        type: The element type.
+        connectivity: Zero-based node row indices, shape ``(M, k)``.
+        element_tags: Original element tags, shape ``(M,)``.
+        slices: Entity-block slices aligned with the flat arrays.
+    """
+
+    type: ElementType
+    connectivity: np.ndarray  # (M, k) int, 0-based node row indices
+    element_tags: np.ndarray  # (M,) int
+    slices: tuple[BlockSlice, ...]
 
     def __repr__(self) -> str:
         return (
-            f"NumpyElementBlock(elements={int(self.connectivity.shape[0])}, "
-            f"nodes_per_element={int(self.connectivity.shape[1])})"
+            f"TypeBlockView(type={self.type.name}, elements={len(self.element_tags)}, "
+            f"slices={len(self.slices)})"
         )
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class NumpyMesh:
-    """A mesh represented as numpy arrays (see `Mesh.to_numpy`).
-
-    Args:
-        coords: Global node coordinates, shape ``(N, 3)``.
-        blocks: One `NumpyElementBlock` per element type.
-    """
-
-    coords: np.ndarray  # (N, 3) float, global
-    blocks: dict[ElementType, NumpyElementBlock]
-
-    def __repr__(self) -> str:
-        types = ", ".join(t.name for t in self.blocks)
-        return f"NumpyMesh(nodes={int(self.coords.shape[0])}, blocks=[{types}])"
 
 
 # -- helpers ---------------------------------------------------------------
@@ -860,6 +865,46 @@ def _synthesize_entities(blocks: list[ElementBlock], nodes: NodeTable) -> list[E
     return records
 
 
+def _build_type_block_views(
+    nodes: NodeTable, elements: tuple[ElementBlock, ...]
+) -> Mapping[ElementType, TypeBlockView]:
+    grouped: dict[ElementType, list[ElementBlock]] = {}
+    for block in elements:
+        grouped.setdefault(block.type, []).append(block)
+
+    views: dict[ElementType, TypeBlockView] = {}
+    connectivity_dtype = np.dtype(np.int32 if len(nodes.tags) < 2**31 else np.int64)
+    for element_type, blocks in grouped.items():
+        if len(blocks) == 1:
+            tag_connectivity = blocks[0].connectivity
+            element_tags = blocks[0].tags
+        else:
+            tag_connectivity = np.concatenate([block.connectivity for block in blocks])
+            element_tags = np.concatenate([block.tags for block in blocks])
+
+        try:
+            connectivity = nodes.indices_for(tag_connectivity)
+        except KeyError as exc:
+            raise ValueError("element references a missing node tag") from exc
+        assert isinstance(connectivity, np.ndarray)
+        connectivity = _freeze(connectivity.astype(connectivity_dtype, copy=False))
+
+        slices: list[BlockSlice] = []
+        start = 0
+        for block in blocks:
+            stop = start + len(block.tags)
+            slices.append(BlockSlice(block.entity_dim, block.entity_tag, start, stop))
+            start = stop
+
+        views[element_type] = TypeBlockView(
+            element_type,
+            connectivity,
+            _freeze(element_tags),
+            tuple(slices),
+        )
+    return MappingProxyType(views)
+
+
 # -- Mesh ------------------------------------------------------------------
 
 
@@ -871,7 +916,14 @@ class Mesh:
     one from disk with `Mesh.read_msh`.
     """
 
-    __slots__ = ("_elements", "_entities", "_groups", "_metadata", "_nodes")
+    __slots__ = (
+        "_blocks_by_type",
+        "_elements",
+        "_entities",
+        "_groups",
+        "_metadata",
+        "_nodes",
+    )
 
     def __init__(
         self,
@@ -897,6 +949,7 @@ class Mesh:
         self._entities = entities
         self._groups = groups
         self._metadata = metadata
+        self._blocks_by_type: Mapping[ElementType, TypeBlockView] | None = None
 
     def __repr__(self) -> str:
         x0, y0, z0, x1, y1, z1 = self.bbox
@@ -1026,37 +1079,89 @@ class Mesh:
         """
         return tuple(b for b in self._elements if b.entity_dim == dim and b.entity_tag == tag)
 
-    # -- numpy view --------------------------------------------------------
+    # -- derived element views ---------------------------------------------
 
-    def to_numpy(self) -> NumpyMesh:
-        """Return a numpy-view representation of the mesh.
+    def blocks_by_type(self) -> Mapping[ElementType, TypeBlockView]:
+        """Return a cached flat view of element blocks grouped by type.
+
+        Only types present in the mesh are included, including types whose
+        blocks are all empty. Connectivity contains zero-based node row indices.
+        The mapping and all arrays in the `TypeBlockView` objects are read-only.
 
         Returns:
-            A `NumpyMesh` with 0-based index connectivity, suitable for
-            solvers.
+            The read-only mapping from element type to flat block view.
 
         Raises:
             ValueError: If an element references a missing node tag.
         """
-        tags = self._nodes.tags
-        index = {int(t): i for i, t in enumerate(tags)}
-        blocks: dict[ElementType, NumpyElementBlock] = {}
-        for block in self._elements:
-            conn = block.connectivity
-            idx = np.array(
-                [[index.get(int(t), -1) for t in row] for row in conn], dtype=np.int64
-            ).reshape(len(conn), _NODE_COUNT[block.type])
-            if (idx < 0).any():
-                raise ValueError("element references a missing node tag")
-            if block.type in blocks:
-                prev = blocks[block.type]
-                blocks[block.type] = NumpyElementBlock(
-                    _freeze(np.concatenate([prev.connectivity, idx])),
-                    _freeze(np.concatenate([prev.node_tags, conn])),
-                )
-            else:
-                blocks[block.type] = NumpyElementBlock(_freeze(idx), _freeze(conn))
-        return NumpyMesh(self._nodes.coords, blocks)
+        views = self._blocks_by_type
+        if views is None:
+            views = _build_type_block_views(self._nodes, self._elements)
+            self._blocks_by_type = views
+        return views
+
+    def element_indices_in_group(self, name: str, dim: int) -> Mapping[ElementType, np.ndarray]:
+        """Return flat element-view row indices for a physical group.
+
+        Args:
+            name: The physical group name.
+            dim: The physical group dimension.
+
+        Returns:
+            A read-only mapping keyed by element types with blocks on the
+            group's entities. Each read-only array contains row indices into
+            the corresponding `TypeBlockView`. The mapping is empty when the
+            group has no matching blocks.
+
+        Raises:
+            KeyError: If no such group exists.
+            ValueError: If an element references a missing node tag.
+        """
+        group = self.physical_group(name, dim)
+        members = set(group.entities)
+        selected: dict[ElementType, np.ndarray] = {}
+        for element_type, view in self.blocks_by_type().items():
+            slices = [
+                block_slice
+                for block_slice in view.slices
+                if (block_slice.entity_dim, block_slice.entity_tag) in members
+            ]
+            if not slices:
+                continue
+            ranges = [
+                np.arange(block_slice.start, block_slice.stop, dtype=np.intp)
+                for block_slice in slices
+            ]
+            indices = ranges[0] if len(ranges) == 1 else np.concatenate(ranges)
+            selected[element_type] = _freeze(indices)
+        return MappingProxyType(selected)
+
+    def node_indices_in_group(self, name: str, dim: int) -> np.ndarray:
+        """Return unique node row indices referenced by a physical group.
+
+        Args:
+            name: The physical group name.
+            dim: The physical group dimension.
+
+        Returns:
+            A sorted, read-only ``np.intp`` array of unique zero-based indices
+            into `Mesh.nodes`. The array is empty when the group has no elements.
+
+        Raises:
+            KeyError: If no such group exists.
+            ValueError: If an element references a missing node tag.
+        """
+        element_indices = self.element_indices_in_group(name, dim)
+        views = self.blocks_by_type()
+        parts = [
+            views[element_type].connectivity[indices].ravel()
+            for element_type, indices in element_indices.items()
+        ]
+        if not parts:
+            return _freeze(np.empty(0, dtype=np.intp))
+        connectivity = parts[0] if len(parts) == 1 else np.concatenate(parts)
+        indices = np.unique(connectivity).astype(np.intp, copy=False)
+        return _freeze(indices)
 
     # -- I/O ---------------------------------------------------------------
 

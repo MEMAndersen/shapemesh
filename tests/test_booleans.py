@@ -32,15 +32,14 @@ from shapemesh import (
 
 
 def _volume(mesh):
-    result = mesh.to_numpy()
+    view = mesh.blocks_by_type().get(ElementType.TET4)
+    if view is None:
+        return 0.0
     total = 0.0
-    for etype, block in result.blocks.items():
-        if etype is not ElementType.TET4:
-            continue
-        for row in block.connectivity:
-            points = result.coords[row]
-            matrix = [points[1] - points[0], points[2] - points[0], points[3] - points[0]]
-            total += abs(np.linalg.det(matrix)) / 6.0
+    for row in view.connectivity:
+        points = mesh.nodes.coords[row]
+        matrix = [points[1] - points[0], points[2] - points[0], points[3] - points[0]]
+        total += abs(np.linalg.det(matrix)) / 6.0
     return total
 
 

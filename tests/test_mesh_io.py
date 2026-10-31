@@ -25,10 +25,9 @@ from shapemesh import (
     MeshFormatError,
     MeshSettings,
     NodeTable,
-    NumpyElementBlock,
-    NumpyMesh,
     PhysicalGroup,
     Point,
+    TypeBlockView,
     build,
 )
 
@@ -161,11 +160,8 @@ def test_repr_summaries(tmp_path):
     assert repr(mesh.entities()[0]) == "EntityRecord(dim=0, tag=1)"
     assert repr(mesh.metadata).startswith("MeshMetadata(dim=2, msh_version='4.1', ")
 
-    numpy_mesh = mesh.to_numpy()
-    assert repr(numpy_mesh) == "NumpyMesh(nodes=3, blocks=[TRI3])"
-    assert repr(numpy_mesh.blocks[ElementType.TRI3]) == (
-        "NumpyElementBlock(elements=1, nodes_per_element=3)"
-    )
+    view = mesh.blocks_by_type()[ElementType.TRI3]
+    assert repr(view) == "TypeBlockView(type=TRI3, elements=1, slices=1)"
 
 
 def _assert_mesh_fidelity(original, reread):
@@ -267,19 +263,16 @@ def test_writer_rejects_inconsistent_connectivity(tmp_path, tags, connectivity):
         mesh.write_msh(tmp_path / "out.msh")
 
 
-def test_to_numpy(tmp_path):
+def test_blocks_by_type(tmp_path):
     path = tmp_path / "tri.msh"
     path.write_text(MINIMAL_MSH, encoding="utf-8")
     mesh = Mesh.read_msh(path)
 
-    result = mesh.to_numpy()
-    assert isinstance(result, NumpyMesh)
-    assert result.coords.shape == (3, 3)
-    assert ElementType.TRI3 in result.blocks
-    block = result.blocks[ElementType.TRI3]
-    assert isinstance(block, NumpyElementBlock)
-    assert block.connectivity.tolist() == [[0, 1, 2]]
-    assert block.node_tags.tolist() == [[1, 2, 3]]
+    view = mesh.blocks_by_type()[ElementType.TRI3]
+    assert isinstance(view, TypeBlockView)
+    assert view.connectivity.tolist() == [[0, 1, 2]]
+    assert mesh.nodes.tags[view.connectivity].tolist() == [[1, 2, 3]]
+    assert view.element_tags.tolist() == [1]
 
 
 def test_unknown_element_type_skipped(tmp_path):
@@ -400,10 +393,10 @@ def test_empty_element_block_roundtrip(tmp_path):
     assert block.tags.shape == (0,)
     assert block.connectivity.shape == (0, 1)
 
-    numpy_block = mesh.to_numpy().blocks[ElementType.POINT1]
-    assert numpy_block.connectivity.shape == (0, 1)
-    assert numpy_block.node_tags.shape == (0, 1)
-    assert repr(numpy_block) == "NumpyElementBlock(elements=0, nodes_per_element=1)"
+    view = mesh.blocks_by_type()[ElementType.POINT1]
+    assert view.connectivity.shape == (0, 1)
+    assert view.element_tags.shape == (0,)
+    assert repr(view) == "TypeBlockView(type=POINT1, elements=0, slices=1)"
 
     out = tmp_path / "empty-block-out.msh"
     mesh.write_msh(out)
