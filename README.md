@@ -93,6 +93,7 @@ Examples covering structural workflows and element-node data access live in
 - [`examples/frame.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/frame.py)
 - [`examples/pilecap.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/pilecap.py)
 - [`examples/element_coordinates.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/element_coordinates.py)
+- [`examples/block_views.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/block_views.py)
 
 ## Documentation
 

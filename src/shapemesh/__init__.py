@@ -28,15 +28,15 @@ from .errors import (
     ShapeMeshError,
 )
 from .mesh import (
+    BlockSlice,
     ElementBlock,
     ElementType,
     EntityRecord,
     Mesh,
     MeshMetadata,
     NodeTable,
-    NumpyElementBlock,
-    NumpyMesh,
     PhysicalGroup,
+    TypeBlockView,
 )
 from .settings import Algorithm2D, Algorithm3D, MeshSettings
 from .shapes import (
@@ -66,6 +66,7 @@ __version__ = "0.1.0"
 __all__ = [
     "Algorithm2D",
     "Algorithm3D",
+    "BlockSlice",
     "Box",
     "BuildError",
     "Circle",
@@ -86,8 +87,6 @@ __all__ = [
     "MeshMetadata",
     "MeshSettings",
     "NodeTable",
-    "NumpyElementBlock",
-    "NumpyMesh",
     "PhysicalGroup",
     "Point",
     "Polygon",
@@ -96,6 +95,7 @@ __all__ = [
     "Shape",
     "ShapeMeshError",
     "Sphere",
+    "TypeBlockView",
     "Union",
     "Vec3",
     "Vec3Like",
