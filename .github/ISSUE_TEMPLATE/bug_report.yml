@@ -1,0 +1,59 @@
+name: Bug report
+description: Report incorrect or unexpected behavior
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please search existing issues
+        before submitting a new one.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproducible example
+      description: Provide short, self-contained code that reproduces the problem.
+      placeholder: |
+        from shapemesh import ...
+
+        # Steps that reproduce the problem
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Include the shapemesh, Python, Gmsh, and NumPy versions and your operating
+        system. You can paste the output of:
+
+        ```bash
+        python -c "import gmsh, numpy, platform, shapemesh; print(f'shapemesh={shapemesh.__version__}, Python={platform.python_version()}, Gmsh={gmsh.__version__}, NumPy={numpy.__version__}, OS={platform.platform()}')"
+        ```
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback or log output
+      description: If applicable, paste the complete error message or relevant log.
+      render: shell
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add relevant settings, screenshots, or MSH files, and any other context.

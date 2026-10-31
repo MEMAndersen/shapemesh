@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest new functionality or an improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please search existing issues before
+        submitting a new one.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem and motivation
+      description: What problem would this solve, and how would it help your workflow?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change or API
+      description: Describe the behavior you would like. A small usage example is welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any workarounds or alternative designs you considered.
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add optional non-goals, acceptance criteria, references, or other context.
