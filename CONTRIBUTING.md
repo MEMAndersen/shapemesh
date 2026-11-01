@@ -29,9 +29,29 @@ reviewed.
       `COPYING.LESSER`, `README.md`, `CHANGELOG.md`, examples, and project URLs.
       Confirm that no stale API, virtual environment, cache, or build directory
       was packaged. Check the sdist file count and size are reasonable.
-- [ ] Record the SHA-256 hashes of the wheel and sdist.
-- [ ] Install the wheel in a clean environment outside the repository and run a
-      small `build()` smoke test.
+- [ ] Record the SHA-256 hashes of the wheel and sdist:
+
+      ```powershell
+      Get-ChildItem dist -File |
+          Where-Object { $_.Name -match '\.(whl|tar\.gz)$' } |
+          Get-FileHash -Algorithm SHA256 |
+          Format-List Path, Hash
+      ```
+
+- [ ] Install the wheel in a clean environment outside the repository and run
+      the release smoke test:
+
+      ```powershell
+      $repo = (Get-Location).Path
+      $check = Join-Path $env:TEMP "shapemesh-release-check"
+      $python = Join-Path $check ".venv\Scripts\python.exe"
+      $wheel = (Get-ChildItem "$repo\dist\*.whl").FullName
+
+      Remove-Item $check -Recurse -Force -ErrorAction SilentlyContinue
+      uv venv "$check\.venv" --python 3.12
+      uv pip install --python $python $wheel
+      & $python "$repo\scripts\release_smoke.py" --expect-version X.Y.Z
+      ```
 
 ### 3. Tag
 

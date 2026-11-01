@@ -45,6 +45,7 @@ path = "src/shapemesh/__init__.py"
 exclude = [
     "/.release-check/**",
     "/.venv/**",
+    "/scripts/**",
     "/venv/**",
     "/build/**",
     "/dist/**",
@@ -88,6 +89,7 @@ known-first-party = ["shapemesh"]
 "src/shapemesh/__init__.py" = ["E402", "F401", "F811"]
 "tests/**" = ["ANN"]
 "examples/**" = ["T201"]
+"scripts/**" = ["T201"]
 
 [tool.pyright]
 include = ["src"]
