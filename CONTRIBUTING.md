@@ -31,27 +31,27 @@ reviewed.
       was packaged. Check the sdist file count and size are reasonable.
 - [ ] Record the SHA-256 hashes of the wheel and sdist:
 
-      ```powershell
-      Get-ChildItem dist -File |
-          Where-Object { $_.Name -match '\.(whl|tar\.gz)$' } |
-          Get-FileHash -Algorithm SHA256 |
-          Format-List Path, Hash
-      ```
+```powershell
+Get-ChildItem dist -File |
+      Where-Object { $_.Name -match '\.(whl|tar\.gz)$' } |
+      Get-FileHash -Algorithm SHA256 |
+      Format-List Path, Hash
+```
 
 - [ ] Install the wheel in a clean environment outside the repository and run
       the release smoke test:
 
-      ```powershell
-      $repo = (Get-Location).Path
-      $check = Join-Path $env:TEMP "shapemesh-release-check"
-      $python = Join-Path $check ".venv\Scripts\python.exe"
-      $wheel = (Get-ChildItem "$repo\dist\*.whl").FullName
+```powershell
+$repo = (Get-Location).Path
+$check = Join-Path $env:TEMP "shapemesh-release-check"
+$python = Join-Path $check ".venv\Scripts\python.exe"
+$wheel = (Get-ChildItem "$repo\dist\*.whl").FullName
 
-      Remove-Item $check -Recurse -Force -ErrorAction SilentlyContinue
-      uv venv "$check\.venv" --python 3.12
-      uv pip install --python $python $wheel
-      & $python "$repo\scripts\release_smoke.py" --expect-version X.Y.Z
-      ```
+Remove-Item $check -Recurse -Force -ErrorAction SilentlyContinue
+uv venv "$check\.venv" --python 3.12
+uv pip install --python $python $wheel
+& $python "$repo\scripts\release_smoke.py" --expect-version X.Y.Z
+```
 
 ### 3. Tag
 
@@ -59,10 +59,10 @@ reviewed.
       produced the artifacts.
 - [ ] Create an annotated tag on that commit:
 
-      ```text
-      git tag -a vX.Y.Z -m "shapemesh X.Y.Z"
-      git push origin vX.Y.Z
-      ```
+```text
+git tag -a vX.Y.Z -m "shapemesh X.Y.Z"
+git push origin vX.Y.Z
+```
 
 - [ ] Do not add commits or rebuild after tagging without repeating the build
       and verification step.
@@ -70,20 +70,20 @@ reviewed.
 ### 4. Publish
 
 - [ ] Optional but recommended for a first release: publish to TestPyPI and
-      install from there in a clean environment.
-
-      ```text
-      uv publish --publish-url https://test.pypi.org/legacy/ dist/*.whl dist/*.tar.gz
-      ```
-
-      When installing from TestPyPI, add PyPI as an extra index so dependencies
+      install from there in a clean environment. When installing from TestPyPI, add PyPI as an extra index so dependencies
       resolve normally.
+
+```text
+uv publish --publish-url https://test.pypi.org/legacy/ dist/*.whl dist/*.tar.gz
+```
+
+      
 
 - [ ] Set `UV_PUBLISH_TOKEN` in the environment, then publish to PyPI:
 
-      ```text
-      uv publish dist/*.whl dist/*.tar.gz
-      ```
+```text
+uv publish dist/*.whl dist/*.tar.gz
+```
 
 - [ ] Verify the version, files, metadata, and hashes on PyPI.
 - [ ] Create a GitHub release from the pushed tag and use the `CHANGELOG.md`
