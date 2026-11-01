@@ -61,7 +61,7 @@ from .shapes import (
 )
 
 # Hatchling reads this value; keep it as the single source of truth.
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Algorithm2D",

@@ -13,8 +13,8 @@ reviewed.
       literal; `pyproject.toml` reads it dynamically. `uv version` cannot get or
       set dynamic versions, so edit the file directly.
 - [ ] Update `CHANGELOG.md` following Common Changelog and `AGENTS.md`: use the
-      release date, merge related changes, link the relevant commits, and credit
-      the author. Do not add an `Unreleased` section.
+      release date, merge related changes, link the relevant PRs or commits, and
+      credit the author. Do not add an `Unreleased` section.
 - [ ] Run the local gates: `uv lock --check`, Ruff lint and format checks,
       Pyright, and the full test suite.
 - [ ] Push the preparation commits and wait for all CI jobs to pass.

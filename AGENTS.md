@@ -110,8 +110,9 @@ updated when a release is prepared, not with every commit. Do not add an
   `### Fixed`, in that order, and omit empty groups.
 - Write each change in the imperative mood on one line, starting with a verb
   such as `Add`, `Fix`, `Remove`, or `Refactor`.
-- End each change with one or more Markdown links to the most relevant commits,
-  for example
+- End each change with one or more Markdown links to the most relevant PRs or commits,
+  for example:
+  ``([`#4`](https://github.com/MEMAndersen/shapemesh/pull/4))``
   ``([`53bd922`](https://github.com/MEMAndersen/shapemesh/commit/53bd922))``.
 - Add the author after the references, for example `(Mads Kruse)`.
 - Follow [3.4. Merge related changes](https://common-changelog.org/#34-merge-related-changes):
