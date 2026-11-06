@@ -25,7 +25,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 ## 3. Non-goals (v1)
 
 - Transformations (translate/rotate/scale)
-- Placement frames (arbitrary orientation) for planar shapes
+- General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
 - Extrude/Revolve
 - Fillet/Chamfer
@@ -103,12 +103,12 @@ If MSH I/O grows too large, split `mesh.py` into `mesh.py` and `msh.py`.
 Point(coord, *, label=None)
 Line(start, end, *, label=None)
 Polyline(points, *, label=None)             # closed iff points[0] == points[-1]
-Circle(center, radius, *, label=None)       # 1D boundary curve; any constant z
-Ellipse(center, rx, ry, *, label=None)      # 1D boundary curve; any constant z
+Circle(center, radius, *, normal=(0, 0, 1), label=None)  # 1D curve; any plane
+Ellipse(center, rx, ry, *, normal=(0, 0, 1), x_axis=None, label=None)
 Polygon(points, *, label=None)              # any plane
 Rectangle(origin, dx, dy, *, label=None)    # axis-aligned; any constant z
-Disk(center, radius, *, label=None)         # 2D filled circle; any constant z
-EllipticalDisk(center, rx, ry, *, label=None)  # 2D filled ellipse; any constant z
+Disk(center, radius, *, normal=(0, 0, 1), label=None)    # 2D filled circle
+EllipticalDisk(center, rx, ry, *, normal=(0, 0, 1), x_axis=None, label=None)
 Sphere(center, radius, *, label=None)
 Box(origin, dx, dy, dz, *, label=None)
 Cylinder(start, end, radius, *, label=None) # provisional signature; see §17
@@ -122,6 +122,10 @@ Rules:
 - `Vec3Like` accepts `Vec3`, tuple/list, or ndarray of 2–3 floats.
 - 2D input pads `z=0`.
 - Coordinates must be finite.
+- `Circle` and `Disk` accept a nonzero plane `normal`; `Ellipse` and `EllipticalDisk` additionally accept an optional in-plane `x_axis` giving the direction of `rx`.
+- The ellipse frame is right-handed: `ry` lies along `normal × x_axis`. With the default normal and automatic x-axis, the public radii retain their original global-x/global-y meanings. The sign of `normal` controls OCC orientation.
+- An automatic x-axis is formed by projecting the global coordinate axis least aligned with the normal into the plane. `x_axis=None` remains stored as `None` so changing the normal recomputes the automatic basis.
+- Direction vectors use scale-safe normalization. An explicit x-axis must be perpendicular to the normal within `1e-12` after normalization; the small remaining normal component is projected out before realization.
 - `Point` is rejected as a vertex coordinate; use `.coord`.
 - `label` is keyword-only, non-empty, stripped, at most 127 characters (a defensive cap; MSH 4.1 imposes no such limit), and must not contain quotes or newlines.
 - Shapes are frozen and hashable.
@@ -476,12 +480,12 @@ release lock
 | Point | `occ.addPoint` | 0 |
 | Line | `occ.addLine` | 1 |
 | Polyline | points + individual `occ.addLine` edges | 1 |
-| Circle | `occ.addCircle` | 1 |
-| Ellipse | `occ.addEllipse` | 1 |
+| Circle | `occ.addCircle` (r, normal + automatic in-plane axis) | 1 |
+| Ellipse | `occ.addEllipse` (major/minor radii + oriented local major axis) | 1 |
 | Polygon | points + lines + `occ.addCurveLoop` + `occ.addPlaneSurface` | 2 |
 | Rectangle | `occ.addRectangle` | 2 |
-| Disk | `occ.addDisk` (r, r) | 2 |
-| EllipticalDisk | `occ.addDisk` (rx, ry) | 2 |
+| Disk | `occ.addDisk` (r, r, normal + automatic in-plane axis) | 2 |
+| EllipticalDisk | `occ.addDisk` (major/minor radii + oriented local major axis) | 2 |
 | Sphere | `occ.addSphere` | 3 |
 | Box | `occ.addBox` | 3 |
 | Cylinder | `occ.addCylinder` | 3 |
@@ -490,6 +494,7 @@ Notes:
 
 - `addWire` and `addCurveLoop` are topology containers, not model entities. They are never tracked as meshable shapes.
 - A `Polyline` labels its individual edges.
+- `Ellipse` and `EllipticalDisk` keep `rx` on the public local x-axis and `ry` on the local y-axis. OCC requires the major radius first, so `rx < ry` swaps the OCC radii and uses the local y-axis as OCC's x-axis.
 - A `Polygon` labels its surface, not its boundary curves.
 - `occ.synchronize()` is still required in Python. The Rust FFI wrapper is dropped, not the Gmsh synchronization call.
 - `fragment` is skipped when there are zero or one live entities; the label map is the identity in that case.
@@ -606,12 +611,12 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Point | Valid `Vec3` |
 | Line | Start ≠ end |
 | Polyline | ≥2 points; consecutive points distinct; closed iff first == last; closed form needs ≥3 distinct points |
-| Circle | Radius > 0 |
-| Ellipse | `rx > 0`, `ry > 0` |
+| Circle | Radius > 0; finite nonzero `normal` |
+| Ellipse | `rx > 0`, `ry > 0`; finite nonzero `normal`; explicit `x_axis` finite, nonzero, and perpendicular to `normal` within `1e-12` |
 | Polygon | ≥3 points; all vertices distinct; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
 | Rectangle | `dx > 0`, `dy > 0` |
-| Disk | Radius > 0 |
-| EllipticalDisk | `rx > 0`, `ry > 0` |
+| Disk | Radius > 0; finite nonzero `normal` |
+| EllipticalDisk | `rx > 0`, `ry > 0`; finite nonzero `normal`; explicit `x_axis` finite, nonzero, and perpendicular to `normal` within `1e-12` |
 | Sphere | Radius > 0 |
 | Box | `dx > 0`, `dy > 0`, `dz > 0` |
 | Cylinder | Start ≠ end; radius > 0 |
@@ -625,6 +630,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 
 - Port Rust primitives and pipeline tests.
 - Every primitive realizes the correct top-dimensional entity/entities and meshes with its group.
+- Oriented circle/ellipse/disk tests cover vertical and oblique planes, explicit and automatic in-plane axes, both radius orderings, both normal signs, invalid frames, and scale-safe direction normalization.
 - Union/intersection/difference on overlapping boxes; volume checks.
 - Box minus sphere ≈ 0.966.
 - Two overlapping boxes fragment into three conformal pieces.
@@ -666,7 +672,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 ## 16. Roadmap (not v1)
 
 - Transforms: translate/rotate/scale
-- Placement frames (arbitrary orientation) for planar shapes
+- General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
 - Extrude/Revolve
 - Fillet/Chamfer
@@ -682,7 +688,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 ## 17. Open items and assumptions
 
 1. **Cylinder signature** is implemented as `Cylinder(start, end, radius)`, with `axis = end - start`.
-2. **Primitive signatures** are implemented as: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred; `Circle(center, radius)`, `Ellipse(center, rx, ry)`, `Disk(center, radius)`, `EllipticalDisk(center, rx, ry)` (axis-aligned, any constant z).
+2. **Primitive signatures** are implemented as: `Box(origin, dx, dy, dz)`, `Rectangle(origin, dx, dy)`, `Sphere(center, radius)`, `Polyline(points)` with closure inferred; `Circle(center, radius, normal=(0, 0, 1))`, `Ellipse(center, rx, ry, normal=(0, 0, 1), x_axis=None)`, `Disk(center, radius, normal=(0, 0, 1))`, and `EllipticalDisk(center, rx, ry, normal=(0, 0, 1), x_axis=None)`. Direction arguments are keyword-only in the actual constructors.
 3. **Boundary orientation**: `EntityRecord.boundary` stores signed tags. Build uses `getBoundary(..., oriented=True)`; the reader preserves signs. If orientation is unknown, empty boundary is allowed.
 4. **Meshless entities**: the reader preserves entities even if they have no elements; the writer requires an `EntityRecord` for every entity referenced by a group.
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.

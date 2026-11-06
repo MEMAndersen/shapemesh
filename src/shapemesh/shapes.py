@@ -36,7 +36,11 @@ from typing import Any, cast
 
 import numpy as np
 
-from .constants import COLLINEARITY_TOLERANCE, PLANARITY_TOLERANCE
+from .constants import (
+    COLLINEARITY_TOLERANCE,
+    PLANARITY_TOLERANCE,
+    PLANE_ORTHOGONALITY_TOLERANCE,
+)
 from .errors import GeometryError, LabelError
 
 __all__ = [
@@ -261,6 +265,56 @@ class Vec3:
 type Vec3Like = Vec3 | Sequence[float] | np.ndarray
 
 
+_GLOBAL_AXES = (Vec3(1, 0, 0), Vec3(0, 1, 0), Vec3(0, 0, 1))
+
+
+def _normalize_direction(value: Vec3Like, name: str) -> Vec3:
+    """Return a unit direction using scale-safe normalization."""
+    vector = Vec3.from_any(value)
+    scale = max(abs(vector.x), abs(vector.y), abs(vector.z))
+    if scale == 0.0:
+        raise GeometryError(f"{name} must be nonzero")
+    scaled = Vec3(vector.x / scale, vector.y / scale, vector.z / scale)
+    length = math.sqrt(scaled.x**2 + scaled.y**2 + scaled.z**2)
+    return Vec3(scaled.x / length, scaled.y / length, scaled.z / length)
+
+
+def _project_to_plane(direction: Vec3, normal: Vec3) -> Vec3:
+    """Project a direction onto the plane perpendicular to a unit normal."""
+    alignment = direction.dot(normal)
+    return Vec3(
+        direction.x - alignment * normal.x,
+        direction.y - alignment * normal.y,
+        direction.z - alignment * normal.z,
+    )
+
+
+def _plane_axes(normal: Vec3Like, x_axis: Vec3Like | None) -> tuple[Vec3, Vec3, Vec3]:
+    """Return normalized normal, x, and y directions for a planar shape."""
+    unit_normal = _normalize_direction(normal, "normal")
+    if x_axis is None:
+        reference = min(_GLOBAL_AXES, key=lambda axis: abs(unit_normal.dot(axis)))
+        unit_x = _normalize_direction(
+            _project_to_plane(reference, unit_normal),
+            "automatic x_axis",
+        )
+    else:
+        unit_x = _normalize_direction(x_axis, "x_axis")
+        if abs(unit_normal.dot(unit_x)) > PLANE_ORTHOGONALITY_TOLERANCE:
+            raise GeometryError("x_axis must be perpendicular to normal")
+        unit_x = _normalize_direction(
+            _project_to_plane(unit_x, unit_normal),
+            "x_axis",
+        )
+    unit_y = _normalize_direction(unit_normal.cross(unit_x), "plane y-axis")
+    return unit_normal, unit_x, unit_y
+
+
+def _xyz(vector: Vec3) -> tuple[float, float, float]:
+    """Return vector components in the form expected by Gmsh."""
+    return vector.x, vector.y, vector.z
+
+
 def _normalize_point_sequence(points: Sequence[Vec3Like], shape_name: str) -> tuple[Vec3, ...]:
     if isinstance(points, (str, bytes)) or not isinstance(points, Sequence):
         raise GeometryError(f"{shape_name} points must be a sequence of coordinates")
@@ -395,31 +449,43 @@ class Polyline(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Circle(Shape):
-    """A circular curve in the plane ``z = center.z`` (1-dimensional).
+    """A circular curve in an arbitrary plane (1-dimensional).
 
     This is the boundary curve only; see `Disk` for the filled region.
 
     Args:
         center: The circle center.
         radius: The radius (positive).
+        normal: The plane normal (nonzero). The default is the global z-axis.
         label: An optional physical-group name.
 
     Raises:
-        GeometryError: If ``radius`` is not positive.
+        GeometryError: If ``radius`` is not positive or ``normal`` is invalid.
         LabelError: If ``label`` is invalid.
     """
 
     center: Vec3
     radius: float
+    normal: Vec3
 
-    def __init__(self, center: Vec3Like, radius: float, *, label: str | None = None) -> None:
+    def __init__(
+        self,
+        center: Vec3Like,
+        radius: float,
+        *,
+        normal: Vec3Like = (0, 0, 1),
+        label: str | None = None,
+    ) -> None:
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "center", Vec3.from_any(center))
         object.__setattr__(self, "radius", radius)
+        object.__setattr__(self, "normal", normal)
         self.__post_init__()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "radius", _positive_float(self.radius, "radius"))
+        normal, _, _ = _plane_axes(self.normal, None)
+        object.__setattr__(self, "normal", normal)
         Shape.__post_init__(self)
 
     @property
@@ -428,42 +494,71 @@ class Circle(Shape):
         return 1
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
-        curve = gmsh.model.occ.addCircle(self.center.x, self.center.y, self.center.z, self.radius)
+        normal, x_axis, _ = _plane_axes(self.normal, None)
+        curve = gmsh.model.occ.addCircle(
+            self.center.x,
+            self.center.y,
+            self.center.z,
+            self.radius,
+            zAxis=_xyz(normal),
+            xAxis=_xyz(x_axis),
+        )
         return [(1, curve)]
 
 
 @dataclass(frozen=True, slots=True, init=False)
 class Ellipse(Shape):
-    """An elliptical curve in the plane ``z = center.z`` (1-dimensional).
+    """An elliptical curve in an arbitrary plane (1-dimensional).
 
     This is the boundary curve only; see `EllipticalDisk` for the filled
-    region.
+    region. The local y-axis is the cross product of the plane normal and local x-axis.
 
     Args:
         center: The ellipse center.
-        rx: The radius along ``x`` (positive).
-        ry: The radius along ``y`` (positive).
+        rx: The radius along the local x-axis (positive).
+        ry: The radius along the local y-axis (positive).
+        normal: The plane normal (nonzero). The default is the global z-axis.
+        x_axis: The in-plane direction of ``rx``, perpendicular to ``normal``. If ``None``, a
+            deterministic direction is selected; with the default normal, this is the global
+            x-axis.
         label: An optional physical-group name.
 
     Raises:
-        GeometryError: If ``rx`` or ``ry`` is not positive.
+        GeometryError: If a radius is not positive or the plane directions are invalid.
         LabelError: If ``label`` is invalid.
     """
 
     center: Vec3
     rx: float
     ry: float
+    normal: Vec3
+    x_axis: Vec3 | None
 
-    def __init__(self, center: Vec3Like, rx: float, ry: float, *, label: str | None = None) -> None:
+    def __init__(
+        self,
+        center: Vec3Like,
+        rx: float,
+        ry: float,
+        *,
+        normal: Vec3Like = (0, 0, 1),
+        x_axis: Vec3Like | None = None,
+        label: str | None = None,
+    ) -> None:
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "center", Vec3.from_any(center))
         object.__setattr__(self, "rx", rx)
         object.__setattr__(self, "ry", ry)
+        object.__setattr__(self, "normal", normal)
+        object.__setattr__(self, "x_axis", x_axis)
         self.__post_init__()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "rx", _positive_float(self.rx, "rx"))
         object.__setattr__(self, "ry", _positive_float(self.ry, "ry"))
+        normal, x_axis, _ = _plane_axes(self.normal, self.x_axis)
+        object.__setattr__(self, "normal", normal)
+        if self.x_axis is not None:
+            object.__setattr__(self, "x_axis", x_axis)
         Shape.__post_init__(self)
 
     @property
@@ -472,17 +567,18 @@ class Ellipse(Shape):
         return 1
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        normal, x_axis, y_axis = _plane_axes(self.normal, self.x_axis)
         major_radius = max(self.rx, self.ry)
         minor_radius = min(self.rx, self.ry)
-        x_axis = (1, 0, 0) if self.rx >= self.ry else (0, 1, 0)
+        major_axis = x_axis if self.rx >= self.ry else y_axis
         curve = gmsh.model.occ.addEllipse(
             self.center.x,
             self.center.y,
             self.center.z,
             major_radius,
             minor_radius,
-            zAxis=(0, 0, 1),
-            xAxis=x_axis,
+            zAxis=_xyz(normal),
+            xAxis=_xyz(major_axis),
         )
         return [(1, curve)]
 
@@ -573,29 +669,41 @@ class Rectangle(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class Disk(Shape):
-    """A filled circular disk in the plane ``z = center.z`` (2-dimensional).
+    """A filled circular disk in an arbitrary plane (2-dimensional).
 
     Args:
         center: The disk center.
         radius: The radius (positive).
+        normal: The plane normal (nonzero). The default is the global z-axis.
         label: An optional physical-group name.
 
     Raises:
-        GeometryError: If ``radius`` is not positive.
+        GeometryError: If ``radius`` is not positive or ``normal`` is invalid.
         LabelError: If ``label`` is invalid.
     """
 
     center: Vec3
     radius: float
+    normal: Vec3
 
-    def __init__(self, center: Vec3Like, radius: float, *, label: str | None = None) -> None:
+    def __init__(
+        self,
+        center: Vec3Like,
+        radius: float,
+        *,
+        normal: Vec3Like = (0, 0, 1),
+        label: str | None = None,
+    ) -> None:
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "center", Vec3.from_any(center))
         object.__setattr__(self, "radius", radius)
+        object.__setattr__(self, "normal", normal)
         self.__post_init__()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "radius", _positive_float(self.radius, "radius"))
+        normal, _, _ = _plane_axes(self.normal, None)
+        object.__setattr__(self, "normal", normal)
         Shape.__post_init__(self)
 
     @property
@@ -604,41 +712,71 @@ class Disk(Shape):
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        normal, x_axis, _ = _plane_axes(self.normal, None)
         surf = gmsh.model.occ.addDisk(
-            self.center.x, self.center.y, self.center.z, self.radius, self.radius
+            self.center.x,
+            self.center.y,
+            self.center.z,
+            self.radius,
+            self.radius,
+            zAxis=_xyz(normal),
+            xAxis=_xyz(x_axis),
         )
         return [(2, surf)]
 
 
 @dataclass(frozen=True, slots=True, init=False)
 class EllipticalDisk(Shape):
-    """A filled elliptical disk in the plane ``z = center.z`` (2-dimensional).
+    """A filled elliptical disk in an arbitrary plane (2-dimensional).
+
+    The local y-axis is the cross product of the plane normal and local x-axis.
 
     Args:
         center: The ellipse center.
-        rx: The radius along ``x`` (positive).
-        ry: The radius along ``y`` (positive).
+        rx: The radius along the local x-axis (positive).
+        ry: The radius along the local y-axis (positive).
+        normal: The plane normal (nonzero). The default is the global z-axis.
+        x_axis: The in-plane direction of ``rx``, perpendicular to ``normal``. If ``None``, a
+            deterministic direction is selected; with the default normal, this is the global
+            x-axis.
         label: An optional physical-group name.
 
     Raises:
-        GeometryError: If ``rx`` or ``ry`` is not positive.
+        GeometryError: If a radius is not positive or the plane directions are invalid.
         LabelError: If ``label`` is invalid.
     """
 
     center: Vec3
     rx: float
     ry: float
+    normal: Vec3
+    x_axis: Vec3 | None
 
-    def __init__(self, center: Vec3Like, rx: float, ry: float, *, label: str | None = None) -> None:
+    def __init__(
+        self,
+        center: Vec3Like,
+        rx: float,
+        ry: float,
+        *,
+        normal: Vec3Like = (0, 0, 1),
+        x_axis: Vec3Like | None = None,
+        label: str | None = None,
+    ) -> None:
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "center", Vec3.from_any(center))
         object.__setattr__(self, "rx", rx)
         object.__setattr__(self, "ry", ry)
+        object.__setattr__(self, "normal", normal)
+        object.__setattr__(self, "x_axis", x_axis)
         self.__post_init__()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "rx", _positive_float(self.rx, "rx"))
         object.__setattr__(self, "ry", _positive_float(self.ry, "ry"))
+        normal, x_axis, _ = _plane_axes(self.normal, self.x_axis)
+        object.__setattr__(self, "normal", normal)
+        if self.x_axis is not None:
+            object.__setattr__(self, "x_axis", x_axis)
         Shape.__post_init__(self)
 
     @property
@@ -647,17 +785,18 @@ class EllipticalDisk(Shape):
         return 2
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        normal, x_axis, y_axis = _plane_axes(self.normal, self.x_axis)
         major_radius = max(self.rx, self.ry)
         minor_radius = min(self.rx, self.ry)
-        x_axis = (1, 0, 0) if self.rx >= self.ry else (0, 1, 0)
+        major_axis = x_axis if self.rx >= self.ry else y_axis
         surf = gmsh.model.occ.addDisk(
             self.center.x,
             self.center.y,
             self.center.z,
             major_radius,
             minor_radius,
-            zAxis=(0, 0, 1),
-            xAxis=x_axis,
+            zAxis=_xyz(normal),
+            xAxis=_xyz(major_axis),
         )
         return [(2, surf)]
 
