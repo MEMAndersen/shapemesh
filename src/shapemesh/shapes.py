@@ -51,12 +51,15 @@ __all__ = [
     "Disk",
     "Ellipse",
     "EllipticalDisk",
+    "Extrude",
+    "ExtrudeAlong",
     "Intersection",
     "Line",
     "Point",
     "Polygon",
     "Polyline",
     "Rectangle",
+    "Revolve",
     "Rotate",
     "Shape",
     "Sphere",
@@ -1269,3 +1272,202 @@ class Rotate(Shape):
             self.angle,
         )
         return dimtags
+
+
+# -- extrusions -------------------------------------------------------------
+
+
+def _validate_extrusion_operand(operand: Shape, operation: str) -> None:
+    if not isinstance(operand, Shape):
+        raise GeometryError(
+            f"{operation} operand must be a Shape instance, got {type(operand).__name__}"
+        )
+    if operand.dimension == 3:
+        raise GeometryError(f"{operation} requires an operand with dimension at most 2")
+
+
+def _filter_extrusion_result(
+    dimtags: list[tuple[int, int]],
+    dimension: int,
+    operation: str,
+) -> list[tuple[int, int]]:
+    result = [dimtag for dimtag in dimtags if dimtag[0] == dimension]
+    if not result:
+        raise GeometryError(f"{operation} produced an empty result")
+    return result
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Extrude(Shape):
+    """Linear extrusion of a shape along an offset.
+
+    Extrusion increases the operand's dimension by one. The operand's label is consumed; only the
+    operation node's own label is used.
+
+    Args:
+        operand: The 0D, 1D, or 2D shape to extrude.
+        offset: The nonzero extrusion offset.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``operand`` is not a shape, is 3D, or ``offset`` is zero or invalid.
+        LabelError: If ``label`` is invalid.
+    """
+
+    operand: Shape
+    offset: Vec3
+
+    def __init__(self, operand: Shape, offset: Vec3Like, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "operand", operand)
+        object.__setattr__(self, "offset", Vec3.from_any(offset))
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_extrusion_operand(self.operand, type(self).__name__)
+        if max(abs(self.offset.x), abs(self.offset.y), abs(self.offset.z)) == 0.0:
+            raise GeometryError("offset must be nonzero")
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the extruded shape."""
+        return self.operand.dimension + 1
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        source = self.operand._realize(gmsh)
+        out = gmsh.model.occ.extrude(source, self.offset.x, self.offset.y, self.offset.z)
+        result = _filter_extrusion_result(out, self.dimension, type(self).__name__)
+        gmsh.model.occ.remove(source, recursive=True)
+        return result
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Revolve(Shape):
+    """Rotational extrusion of a shape around an arbitrary axis.
+
+    Revolution increases the operand's dimension by one. The angle follows the right-hand rule
+    around the directed axis. The operand's label is consumed; only the operation node's own label
+    is used.
+
+    Args:
+        operand: The 0D, 1D, or 2D shape to revolve.
+        angle: The nonzero rotation angle in radians, with magnitude at most ``2 * math.pi``.
+        pivot: A point on the rotation axis. The default is the global origin.
+        axis: The rotation-axis direction (nonzero). The default is the global z-axis.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``operand`` is not a shape, is 3D, or the revolution geometry is invalid.
+        LabelError: If ``label`` is invalid.
+    """
+
+    operand: Shape
+    angle: float
+    pivot: Vec3
+    axis: Vec3
+
+    def __init__(
+        self,
+        operand: Shape,
+        angle: float,
+        *,
+        pivot: Vec3Like = (0, 0, 0),
+        axis: Vec3Like = (0, 0, 1),
+        label: str | None = None,
+    ) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "operand", operand)
+        object.__setattr__(self, "angle", angle)
+        object.__setattr__(self, "pivot", Vec3.from_any(pivot))
+        object.__setattr__(self, "axis", axis)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_extrusion_operand(self.operand, type(self).__name__)
+        angle = _finite_float(self.angle, "angle")
+        if angle == 0.0:
+            raise GeometryError("angle must be nonzero")
+        if abs(angle) > 2 * math.pi:
+            raise GeometryError("angle magnitude must not exceed 2 * math.pi")
+        object.__setattr__(self, "angle", angle)
+        object.__setattr__(self, "axis", _normalize_direction(self.axis, "axis"))
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the revolved shape."""
+        return self.operand.dimension + 1
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        source = self.operand._realize(gmsh)
+        out = gmsh.model.occ.revolve(
+            source,
+            self.pivot.x,
+            self.pivot.y,
+            self.pivot.z,
+            self.axis.x,
+            self.axis.y,
+            self.axis.z,
+            self.angle,
+        )
+        result = _filter_extrusion_result(out, self.dimension, type(self).__name__)
+        gmsh.model.occ.remove(source, recursive=True)
+        return result
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class ExtrudeAlong(Shape):
+    """Extrusion of a profile along one smooth guide curve.
+
+    The guide must realize as exactly one curve suitable for `occ.addPipe`. Lines, circles,
+    ellipses, and revolution-generated arcs are supported. Multi-segment wires and sharp paths are
+    rejected. Profile placement and orientation follow OCC pipe semantics; they are not inferred
+    automatically. Extrusion increases the profile's dimension by one.
+
+    Labels on both the profile and guide are consumed; only the operation node's own label is used.
+
+    Args:
+        operand: The 0D, 1D, or 2D profile to sweep.
+        guide: The 1D shape defining the sweep path.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If the profile or guide has an invalid type or dimension, or the guide does
+            not realize as exactly one curve.
+        LabelError: If ``label`` is invalid.
+    """
+
+    operand: Shape
+    guide: Shape
+
+    def __init__(self, operand: Shape, guide: Shape, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "operand", operand)
+        object.__setattr__(self, "guide", guide)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_extrusion_operand(self.operand, type(self).__name__)
+        if not isinstance(self.guide, Shape):
+            raise GeometryError(f"guide must be a Shape instance, got {type(self.guide).__name__}")
+        if self.guide.dimension != 1:
+            raise GeometryError("guide must be one-dimensional")
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the swept shape."""
+        return self.operand.dimension + 1
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        source = self.operand._realize(gmsh)
+        guide = self.guide._realize(gmsh)
+        if len(guide) != 1:
+            raise GeometryError("guide must realize as exactly one smooth curve")
+        wire = gmsh.model.occ.addWire([guide[0][1]], checkClosed=False)
+        out = gmsh.model.occ.addPipe(source, wire, trihedron="DiscreteTrihedron")
+        result = _filter_extrusion_result(out, self.dimension, type(self).__name__)
+        gmsh.model.occ.remove(source, recursive=True)
+        gmsh.model.occ.remove(guide, recursive=True)
+        return result

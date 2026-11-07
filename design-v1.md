@@ -27,7 +27,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 - Scaling and general affine transformations
 - General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
-- Extrude/Revolve
+- Sweeping along sharp or multi-segment guide paths
 - Fillet/Chamfer
 - STEP import
 - Mesh size fields
@@ -49,7 +49,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 | Point | 0D shape plus `Vec3` coordinate type | Gmsh 0D entities contain type-15 point elements; avoids label leakage |
 | Labels | Merge duplicate `(label, dim)` | Matches Gmsh physical groups and multi-entity groups |
 | Overlaps | Fragment remap | A shared fragment entity can belong to multiple label groups |
-| Operation labels | Operand labels consumed by booleans and transforms; result label survives | Rust parity for booleans and explicit root semantics for transforms |
+| Operation labels | Operand labels consumed by booleans, transforms, and extrusions; result label survives | Rust parity for booleans and explicit root semantics for transforms |
 | Build | Required settings; single shape or sequence | Explicitness |
 | Mesh | Hybrid; numpy required | Performance; zero-copy views |
 | Node model | Global `NodeTable` plus optional entity tags | MSH4 writer needs blocks; global view needs coords |
@@ -88,6 +88,7 @@ shapemesh/
     ├── test_primitives.py
     ├── test_booleans.py
     ├── test_transforms.py
+    ├── test_extrusions.py
     ├── test_pipeline.py
     └── test_threading.py
 ```
@@ -118,6 +119,9 @@ Intersection(*operands, *, label=None)
 Difference(*operands, *, label=None)        # first operand minus union of the rest
 Translate(operand, offset, *, label=None)
 Rotate(operand, angle, *, pivot=(0, 0, 0), axis=(0, 0, 1), label=None)
+Extrude(operand, offset, *, label=None)
+Revolve(operand, angle, *, pivot=(0, 0, 0), axis=(0, 0, 1), label=None)
+ExtrudeAlong(operand, guide, *, label=None)
 ```
 
 Rules:
@@ -138,6 +142,7 @@ Rules:
 - An empty boolean result raises `GeometryError`.
 - `Difference(a, b, c)` means `a - (b ∪ c)`.
 - `Translate` and `Rotate` are unary shape nodes that preserve their operand's dimension. Nested transforms apply inside-out; rotation uses radians and the right-hand rule around a normalized axis.
+- `Extrude`, `Revolve`, and `ExtrudeAlong` increase their operand's dimension by one and accept operands of dimension at most 2. `Revolve` uses the same pivot, axis, and right-hand-rule convention as `Rotate`; its angle magnitude is at most `2 * math.pi`. `ExtrudeAlong` requires a guide that realizes as exactly one smooth curve; multi-segment, sharp, branching, and disconnected guides are rejected. Profile placement and orientation follow OCC pipe semantics.
 
 ### 6.2 Build
 
@@ -258,6 +263,8 @@ keyword operand forms are mutually exclusive.
 
 `Translate` and `Rotate` are frozen, hashable unary dataclass nodes with custom constructors that support `dataclasses.replace`. Each occurrence realizes its operand independently, transforms only those transient OCC entities, and returns the same top-level dimtags. Realization results are not cached or shared, and `occ.copy` is not used.
 
+`Extrude`, `Revolve`, and `ExtrudeAlong` follow the same frozen, hashable node pattern and support `dataclasses.replace`. Each occurrence realizes its operand (and guide) independently, calls one OCC operation, filters the returned entities to the result's top dimension, and removes the now-unused source and guide entities. Operation-local cleanup does not affect other occurrences of the same immutable shape.
+
 ### 7.2 Labels and physical groups
 
 ```python
@@ -269,8 +276,8 @@ groups: dict[tuple[str, int], set[tuple[int, int]]] = {}
 - Duplicate labels of the same dimension merge into one physical group.
 - Different dimensions are separate groups.
 - Fragment preserves labels: a shared output entity appears in every group whose input map contains it.
-- Boolean and transform operations consume operand labels; the operation result's own label survives.
-- Labels lost in booleans and transforms disappear silently; this is documented.
+- Boolean, transform, and extrusion operations consume operand (and guide) labels; the operation result's own label survives.
+- Labels lost in booleans, transforms, and extrusions disappear silently; this is documented.
 - Remap rules after fragment:
   - Work per label.
   - Include all output entities from that label's input map.
@@ -497,6 +504,9 @@ release lock
 | Cylinder | `occ.addCylinder` | 3 |
 | Translate | operand realization + `occ.translate` | operand dimension |
 | Rotate | operand realization + `occ.rotate` | operand dimension |
+| Extrude | operand realization + `occ.extrude` | operand dimension + 1 |
+| Revolve | operand realization + `occ.revolve` | operand dimension + 1 |
+| ExtrudeAlong | profile realization + guide realization + transient `occ.addWire` + `occ.addPipe` | operand dimension + 1 |
 
 Notes:
 
@@ -504,6 +514,9 @@ Notes:
 - A `Polyline` labels its individual edges.
 - `Ellipse` and `EllipticalDisk` keep `rx` on the public local x-axis and `ry` on the local y-axis. OCC requires the major radius first, so `rx < ry` swaps the OCC radii and uses the local y-axis as OCC's x-axis.
 - Transforms pass the operand's complete top-dimensional dimtag list to one OCC call, preserving shared topology across multi-entity operands. OCC may replace lower-dimensional boundary tags during a transform, so realization never caches those tags; final entity records are read after all operations.
+- Extrusions filter the OCC result to the target top dimension. `occ.extrude`, `occ.revolve`, and `occ.addPipe` also return caps, lateral faces, and other lower-dimensional entities; these are not tracked as the operation result.
+- After extrusion, the transient source is removed recursively. `ExtrudeAlong` also removes its guide. This cleanup is operation-local: it never deletes other independently realized occurrences or unrelated lower-dimensional shapes.
+- `ExtrudeAlong` passes a transient `addWire` container to `occ.addPipe` and requires the guide to realize as exactly one smooth curve. Lines, circles, ellipses, and revolution-generated arcs are supported. Multi-segment wires, sharp corners, branching, disconnected curves, and unsuitable profile placement are unsupported; OCC may otherwise return partial or degenerate geometry instead of raising.
 - A `Polygon` labels its surface, not its boundary curves.
 - `occ.synchronize()` is still required in Python. The Rust FFI wrapper is dropped, not the Gmsh synchronization call.
 - `fragment` is skipped when there are zero or one live entities; the label map is the identity in that case.
@@ -632,6 +645,9 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Booleans | ≥2 operands; same dimension; non-empty result |
 | Translate | One `Shape` operand; valid finite `offset` |
 | Rotate | One `Shape` operand; finite `angle`; valid `pivot`; finite nonzero `axis`, normalized scale-safely |
+| Extrude | One `Shape` operand of dimension at most 2; finite nonzero `offset` |
+| Revolve | One `Shape` operand of dimension at most 2; finite nonzero `angle` with magnitude at most `2 * math.pi`; valid `pivot`; finite nonzero `axis`, normalized scale-safely |
+| ExtrudeAlong | One `Shape` operand of dimension at most 2; one 1D `Shape` guide that realizes as exactly one smooth curve |
 | Labels | Non-empty, stripped, ≤127 chars, no quotes/newlines |
 | Build | Non-empty shape sequence; required settings |
 
@@ -647,6 +663,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Two overlapping boxes fragment into three conformal pieces.
 - Nested `(a - b) + c`.
 - Transform tests cover all dimensions, arbitrary rotation axes and pivots, nested ordering, transforms around and inside booleans, multi-entity topology, shape reuse, identity operations, label consumption, fragmentation, and invalid inputs.
+- Extrusion tests cover all dimension transitions, output filtering, source and guide cleanup, partial and full revolution, negative angles, straight and circular guides, revolution-generated arcs, torus volume, multi-entity profiles, boolean composition, label consumption, fragmentation, and invalid inputs. A multi-segment guide is rejected explicitly.
 - Line-in-box mixed-dimension fragment.
 - Overlapping-group test described in §8.2.
 - Label merge test: same label and dimension produce one group containing both entities.
@@ -686,7 +703,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Scaling and general affine transformations
 - General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
-- Extrude/Revolve
+- Sweeping along sharp or multi-segment guide paths
 - Fillet/Chamfer
 - STEP import
 - Mesh size fields
@@ -704,7 +721,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 3. **Boundary orientation**: `EntityRecord.boundary` stores signed tags. Build uses `getBoundary(..., oriented=True)`; the reader preserves signs. If orientation is unknown, empty boundary is allowed.
 4. **Meshless entities**: the reader preserves entities even if they have no elements; the writer requires an `EntityRecord` for every entity referenced by a group.
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.
-6. **Label loss in booleans and transforms** is silent and documented.
+6. **Label loss in booleans, transforms, and extrusions** is silent and documented.
 7. **Static element enum**: only the curated `ElementType` members are supported; unknown type codes are tolerated on read (skipped by reading the per-element node width from the first element line) but rejected by the writer and the `ElementType`-keyed API.
 
 ## 18. Next steps
