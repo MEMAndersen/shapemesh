@@ -117,7 +117,7 @@ Union(*operands, *, label=None)
 Intersection(*operands, *, label=None)
 Difference(*operands, *, label=None)        # first operand minus union of the rest
 Translate(operand, offset, *, label=None)
-Rotate(operand, angle, *, origin=(0, 0, 0), axis=(0, 0, 1), label=None)
+Rotate(operand, angle, *, pivot=(0, 0, 0), axis=(0, 0, 1), label=None)
 ```
 
 Rules:
@@ -631,7 +631,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Cylinder | Start ≠ end; radius > 0 |
 | Booleans | ≥2 operands; same dimension; non-empty result |
 | Translate | One `Shape` operand; valid finite `offset` |
-| Rotate | One `Shape` operand; finite `angle`; valid `origin`; finite nonzero `axis`, normalized scale-safely |
+| Rotate | One `Shape` operand; finite `angle`; valid `pivot`; finite nonzero `axis`, normalized scale-safely |
 | Labels | Non-empty, stripped, ≤127 chars, no quotes/newlines |
 | Build | Non-empty shape sequence; required settings |
 
@@ -646,7 +646,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Box minus sphere ≈ 0.966.
 - Two overlapping boxes fragment into three conformal pieces.
 - Nested `(a - b) + c`.
-- Transform tests cover all dimensions, arbitrary rotation axes and origins, nested ordering, transforms around and inside booleans, multi-entity topology, shape reuse, identity operations, label consumption, fragmentation, and invalid inputs.
+- Transform tests cover all dimensions, arbitrary rotation axes and pivots, nested ordering, transforms around and inside booleans, multi-entity topology, shape reuse, identity operations, label consumption, fragmentation, and invalid inputs.
 - Line-in-box mixed-dimension fragment.
 - Overlapping-group test described in §8.2.
 - Label merge test: same label and dimension produce one group containing both entities.

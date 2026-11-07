@@ -59,14 +59,14 @@ def test_rotate_construction_and_replace():
     transform = Rotate(
         operand,
         math.pi / 2,
-        origin=(1, 0),
+        pivot=(1, 0),
         axis=(0, 0, 10),
         label="rotated",
     )
 
     assert transform.dimension == 1
     assert transform.angle == math.pi / 2
-    assert transform.origin == Vec3(1, 0, 0)
+    assert transform.pivot == Vec3(1, 0, 0)
     assert transform.axis == Vec3(0, 0, 1)
     assert transform.label == "rotated"
 
@@ -102,7 +102,7 @@ def test_transforms_reject_invalid_vectors():
     with pytest.raises(GeometryError):
         Translate(Point((0, 0)), (float("inf"), 0))
     with pytest.raises(GeometryError):
-        Rotate(Point((0, 0)), 1, origin=(float("nan"), 0))
+        Rotate(Point((0, 0)), 1, pivot=(float("nan"), 0))
     with pytest.raises(GeometryError, match="axis must be nonzero"):
         Rotate(Point((0, 0)), 1, axis=(0, 0, 0))
 
@@ -127,7 +127,7 @@ def test_translate_across_dimensions(operand, expected_bbox):
     [
         (Point((1, 0, 0)), math.pi / 2, {}, (0, 1, 0)),
         (Point((1, 0, 0)), -math.pi / 2, {}, (0, -1, 0)),
-        (Point((2, 0, 0)), math.pi / 2, {"origin": (1, 0, 0)}, (1, 1, 0)),
+        (Point((2, 0, 0)), math.pi / 2, {"pivot": (1, 0, 0)}, (1, 1, 0)),
         (Point((0, 1, 0)), math.pi / 2, {"axis": (1, 0, 0)}, (0, 0, 1)),
         (
             Point((1, 0, 0)),
@@ -136,7 +136,7 @@ def test_translate_across_dimensions(operand, expected_bbox):
             (-1 / 3, 2 / 3, 2 / 3),
         ),
     ],
-    ids=["z-axis", "negative-angle", "offset-origin", "x-axis", "diagonal-axis"],
+    ids=["z-axis", "negative-angle", "offset-pivot", "x-axis", "diagonal-axis"],
 )
 def test_rotate_point(operand, angle, rotation_kwargs, expected):
     mesh = build(Rotate(operand, angle, **rotation_kwargs), MeshSettings())

@@ -1215,7 +1215,7 @@ class Rotate(Shape):
     Args:
         operand: The shape to rotate.
         angle: The rotation angle in radians.
-        origin: A point on the rotation axis. The default is the global origin.
+        pivot: A point on the rotation axis. The default is the global origin.
         axis: The rotation-axis direction (nonzero). The default is the global z-axis.
         label: An optional physical-group name.
 
@@ -1226,7 +1226,7 @@ class Rotate(Shape):
 
     operand: Shape
     angle: float
-    origin: Vec3
+    pivot: Vec3
     axis: Vec3
 
     def __init__(
@@ -1234,14 +1234,14 @@ class Rotate(Shape):
         operand: Shape,
         angle: float,
         *,
-        origin: Vec3Like = (0, 0, 0),
+        pivot: Vec3Like = (0, 0, 0),
         axis: Vec3Like = (0, 0, 1),
         label: str | None = None,
     ) -> None:
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "operand", operand)
         object.__setattr__(self, "angle", angle)
-        object.__setattr__(self, "origin", Vec3.from_any(origin))
+        object.__setattr__(self, "pivot", Vec3.from_any(pivot))
         object.__setattr__(self, "axis", axis)
         self.__post_init__()
 
@@ -1260,9 +1260,9 @@ class Rotate(Shape):
         dimtags = self.operand._realize(gmsh)
         gmsh.model.occ.rotate(
             dimtags,
-            self.origin.x,
-            self.origin.y,
-            self.origin.z,
+            self.pivot.x,
+            self.pivot.y,
+            self.pivot.z,
             self.axis.x,
             self.axis.y,
             self.axis.z,
