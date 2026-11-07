@@ -12,10 +12,10 @@ shapes, n-ary booleans, and entity-level MSH 4.1 I/O.
 shapemesh is an easy-to-use wrapper for the powerful Gmsh meshing library. It
 simplifies creating complex geometries and meshing them into three steps:
 create primitive 1D to 3D shapes using the `Shape` primitives — for example a
-`Line`, `Polygon`, or `Box`; combine them into more complex shapes with boolean
-operations such as `Union`; and label them. Labels become Gmsh physical groups,
-so after calling `build()` you can query the elements belonging to each labelled
-shape.
+`Line`, `Polygon`, or `Box`; combine them with boolean operations such as `Union`
+and rigid transforms such as `Translate` and `Rotate`; and label them. Labels
+become Gmsh physical groups, so after calling `build()` you can query the elements
+belonging to each labelled shape.
 
 ## Features
 
@@ -24,6 +24,8 @@ shape.
   Missing something? Open an issue — the v1 set is intentionally small.
 - **n-ary booleans:** `Union`, `Intersection`, `Difference` with variadic or
   sequence constructors.
+- **Rigid transforms:** `Translate` and `Rotate` compose with primitives and
+  booleans in the immutable shape graph.
 - **Overlapping physical groups:** labels are preserved across Gmsh fragment
   remapping, so an intersection volume can belong to multiple groups.
 - **MSH 4.1 ASCII I/O:** read and write entity-classified meshes, with or

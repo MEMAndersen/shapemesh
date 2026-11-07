@@ -24,7 +24,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 
 ## 3. Non-goals (v1)
 
-- Transformations (translate/rotate/scale)
+- Scaling and general affine transformations
 - General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
 - Extrude/Revolve
@@ -49,7 +49,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 | Point | 0D shape plus `Vec3` coordinate type | Gmsh 0D entities contain type-15 point elements; avoids label leakage |
 | Labels | Merge duplicate `(label, dim)` | Matches Gmsh physical groups and multi-entity groups |
 | Overlaps | Fragment remap | A shared fragment entity can belong to multiple label groups |
-| Boolean labels | Operand labels consumed; result label survives | Rust parity |
+| Operation labels | Operand labels consumed by booleans and transforms; result label survives | Rust parity for booleans and explicit root semantics for transforms |
 | Build | Required settings; single shape or sequence | Explicitness |
 | Mesh | Hybrid; numpy required | Performance; zero-copy views |
 | Node model | Global `NodeTable` plus optional entity tags | MSH4 writer needs blocks; global view needs coords |
@@ -87,6 +87,7 @@ shapemesh/
     ├── test_mesh_io.py
     ├── test_primitives.py
     ├── test_booleans.py
+    ├── test_transforms.py
     ├── test_pipeline.py
     └── test_threading.py
 ```
@@ -115,6 +116,8 @@ Cylinder(start, end, radius, *, label=None) # provisional signature; see §17
 Union(*operands, *, label=None)
 Intersection(*operands, *, label=None)
 Difference(*operands, *, label=None)        # first operand minus union of the rest
+Translate(operand, offset, *, label=None)
+Rotate(operand, angle, *, origin=(0, 0, 0), axis=(0, 0, 1), label=None)
 ```
 
 Rules:
@@ -134,6 +137,7 @@ Rules:
 - Booleans require at least two operands of the same topological dimension.
 - An empty boolean result raises `GeometryError`.
 - `Difference(a, b, c)` means `a - (b ∪ c)`.
+- `Translate` and `Rotate` are unary shape nodes that preserve their operand's dimension. Nested transforms apply inside-out; rotation uses radians and the right-hand rule around a normalized axis.
 
 ### 6.2 Build
 
@@ -252,6 +256,8 @@ class Union(Shape):
 The keyword-only `operands` path supports `dataclasses.replace`; positional and
 keyword operand forms are mutually exclusive.
 
+`Translate` and `Rotate` are frozen, hashable unary dataclass nodes with custom constructors that support `dataclasses.replace`. Each occurrence realizes its operand independently, transforms only those transient OCC entities, and returns the same top-level dimtags. Realization results are not cached or shared, and `occ.copy` is not used.
+
 ### 7.2 Labels and physical groups
 
 ```python
@@ -263,8 +269,8 @@ groups: dict[tuple[str, int], set[tuple[int, int]]] = {}
 - Duplicate labels of the same dimension merge into one physical group.
 - Different dimensions are separate groups.
 - Fragment preserves labels: a shared output entity appears in every group whose input map contains it.
-- Boolean operations consume operand labels; the result label survives.
-- Labels lost in booleans disappear silently; this is documented.
+- Boolean and transform operations consume operand labels; the operation result's own label survives.
+- Labels lost in booleans and transforms disappear silently; this is documented.
 - Remap rules after fragment:
   - Work per label.
   - Include all output entities from that label's input map.
@@ -489,12 +495,15 @@ release lock
 | Sphere | `occ.addSphere` | 3 |
 | Box | `occ.addBox` | 3 |
 | Cylinder | `occ.addCylinder` | 3 |
+| Translate | operand realization + `occ.translate` | operand dimension |
+| Rotate | operand realization + `occ.rotate` | operand dimension |
 
 Notes:
 
 - `addWire` and `addCurveLoop` are topology containers, not model entities. They are never tracked as meshable shapes.
 - A `Polyline` labels its individual edges.
 - `Ellipse` and `EllipticalDisk` keep `rx` on the public local x-axis and `ry` on the local y-axis. OCC requires the major radius first, so `rx < ry` swaps the OCC radii and uses the local y-axis as OCC's x-axis.
+- Transforms pass the operand's complete top-dimensional dimtag list to one OCC call, preserving shared topology across multi-entity operands. OCC may replace lower-dimensional boundary tags during a transform, so realization never caches those tags; final entity records are read after all operations.
 - A `Polygon` labels its surface, not its boundary curves.
 - `occ.synchronize()` is still required in Python. The Rust FFI wrapper is dropped, not the Gmsh synchronization call.
 - `fragment` is skipped when there are zero or one live entities; the label map is the identity in that case.
@@ -621,6 +630,8 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Box | `dx > 0`, `dy > 0`, `dz > 0` |
 | Cylinder | Start ≠ end; radius > 0 |
 | Booleans | ≥2 operands; same dimension; non-empty result |
+| Translate | One `Shape` operand; valid finite `offset` |
+| Rotate | One `Shape` operand; finite `angle`; valid `origin`; finite nonzero `axis`, normalized scale-safely |
 | Labels | Non-empty, stripped, ≤127 chars, no quotes/newlines |
 | Build | Non-empty shape sequence; required settings |
 
@@ -635,6 +646,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Box minus sphere ≈ 0.966.
 - Two overlapping boxes fragment into three conformal pieces.
 - Nested `(a - b) + c`.
+- Transform tests cover all dimensions, arbitrary rotation axes and origins, nested ordering, transforms around and inside booleans, multi-entity topology, shape reuse, identity operations, label consumption, fragmentation, and invalid inputs.
 - Line-in-box mixed-dimension fragment.
 - Overlapping-group test described in §8.2.
 - Label merge test: same label and dimension produce one group containing both entities.
@@ -671,7 +683,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 
 ## 16. Roadmap (not v1)
 
-- Transforms: translate/rotate/scale
+- Scaling and general affine transformations
 - General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
 - Extrude/Revolve
@@ -692,7 +704,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 3. **Boundary orientation**: `EntityRecord.boundary` stores signed tags. Build uses `getBoundary(..., oriented=True)`; the reader preserves signs. If orientation is unknown, empty boundary is allowed.
 4. **Meshless entities**: the reader preserves entities even if they have no elements; the writer requires an `EntityRecord` for every entity referenced by a group.
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.
-6. **Label loss in booleans** is silent and documented.
+6. **Label loss in booleans and transforms** is silent and documented.
 7. **Static element enum**: only the curated `ElementType` members are supported; unknown type codes are tolerated on read (skipped by reading the per-element node width from the first element line) but rejected by the writer and the `ElementType`-keyed API.
 
 ## 18. Next steps
