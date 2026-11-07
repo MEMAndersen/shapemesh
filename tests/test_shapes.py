@@ -227,6 +227,56 @@ def test_disk_primitives():
         EllipticalDisk((0, 0, 0), 1, 0)
 
 
+def test_planar_shape_directions_are_normalized():
+    for shape in (
+        Circle((0, 0), 1, normal=(0, 0, 10)),
+        Disk((0, 0), 1, normal=(0, 0, 10)),
+    ):
+        assert shape.normal == Vec3(0, 0, 1)
+
+    ellipse = Ellipse((0, 0), 2, 1, normal=(0, 0, 10), x_axis=(0, 5, 0))
+    assert ellipse.normal == Vec3(0, 0, 1)
+    assert ellipse.x_axis == Vec3(0, 1, 0)
+    assert Ellipse((0, 0), 2, 1).x_axis is None
+    assert EllipticalDisk((0, 0), 2, 1).x_axis is None
+
+
+def test_direction_normalization_is_scale_safe():
+    shape = Circle((0, 0), 1, normal=(1e308, 1e308, 1e308))
+    assert shape.normal.x == pytest.approx(3**-0.5)
+    assert shape.normal.y == pytest.approx(3**-0.5)
+    assert shape.normal.z == pytest.approx(3**-0.5)
+
+    tiny = Disk((0, 0), 1, normal=(5e-324, 0, 0))
+    assert tiny.normal == Vec3(1, 0, 0)
+
+
+@pytest.mark.parametrize("shape_type", [Circle, Disk])
+def test_circular_shapes_reject_zero_normal(shape_type):
+    with pytest.raises(GeometryError, match="normal must be nonzero"):
+        shape_type((0, 0), 1, normal=(0, 0, 0))
+
+
+@pytest.mark.parametrize("shape_type", [Ellipse, EllipticalDisk])
+def test_elliptical_shapes_reject_zero_normal(shape_type):
+    with pytest.raises(GeometryError, match="normal must be nonzero"):
+        shape_type((0, 0), 2, 1, normal=(0, 0, 0))
+
+
+@pytest.mark.parametrize("shape_type", [Ellipse, EllipticalDisk])
+@pytest.mark.parametrize("x_axis", [(0, 0, 0), (0, 0, 1), (1, 0, 1)])
+def test_elliptical_shapes_reject_invalid_x_axis(shape_type, x_axis):
+    with pytest.raises(GeometryError):
+        shape_type((0, 0), 2, 1, x_axis=x_axis)
+
+
+def test_replace_recomputes_automatic_ellipse_axis():
+    ellipse = Ellipse((0, 0), 2, 1)
+    replaced = replace(ellipse, normal=(1, 0, 0))
+    assert replaced.normal == Vec3(1, 0, 0)
+    assert replaced.x_axis is None
+
+
 def test_volume_primitives():
     assert Sphere((0, 0, 0), 1).dimension == 3
     with pytest.raises(GeometryError):

@@ -25,6 +25,10 @@ PLANARITY_TOLERANCE = 1e-7
 # between them exceeds this value.
 COLLINEARITY_TOLERANCE = 1e-7
 
+# Normalized plane normals and x-axes are considered perpendicular when the
+# absolute value of their dot product is below this dimensionless tolerance.
+PLANE_ORTHOGONALITY_TOLERANCE = 1e-12
+
 # `General.Terminal` is a gmsh verbosity level (0 = silent, higher = more
 # verbose), not a binary toggle. shapemesh is silent by default and uses
 # gmsh's normal level when `verbose` is set.
