@@ -21,7 +21,7 @@ becomes its own entity:
 So an entity can belong to multiple physical groups, which is what MSH 4.1's
 `$Entities` physical-tag list represents.
 
-## Booleans, transforms, and extrusions consume labels
+## Booleans, transforms, extrusions, and paths consume labels
 
 A boolean, transform, or extrusion result only carries its *own* label. The
 labels of its operands are consumed and silently dropped:
@@ -43,6 +43,22 @@ build(
     settings,
 )
 ```
+
+`Path` consumes the labels of its segments. Its own label applies to every
+realized curve, so a labelled path becomes one physical group with one entity
+per segment:
+
+```python
+# Segment labels are gone; all curves join the "guide" group.
+guide = Path(
+    Line(..., label="segment"),
+    CircleArc(..., label="segment"),
+    label="guide",
+)
+```
+
+When a `Path` is used as an `ExtrudeAlong` guide, the path label is consumed as
+well; only the extrusion's own label survives.
 
 ## Label rules
 

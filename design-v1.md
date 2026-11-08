@@ -13,7 +13,8 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 
 ## 2. Goals
 
-- Port the shape primitives (Point, Line, Polyline, Circle, Ellipse, Polygon, Rectangle, Disk, EllipticalDisk, Sphere, Box, Cylinder) and n-ary booleans.
+- Port the shape primitives (Point, Line, Polyline, Circle, CircleArc, Ellipse, Polygon, Rectangle, Disk, EllipticalDisk, Sphere, Box, Cylinder) and n-ary booleans.
+- Compose smooth multi-segment guide paths from lines and circular arcs.
 - Validate before touching Gmsh.
 - Keep the mesh entity-classified, matching Gmsh's `.msh` model.
 - Provide deterministic label → physical group semantics.
@@ -27,7 +28,7 @@ The design keeps the useful part of the Rust pipeline while dropping the Rust FF
 - Scaling and general affine transformations
 - General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
-- Sweeping along sharp or multi-segment guide paths
+- Sweeping along sharp guide paths
 - Fillet/Chamfer
 - STEP import
 - Mesh size fields
@@ -106,6 +107,8 @@ Point(coord, *, label=None)
 Line(start, end, *, label=None)
 Polyline(points, *, label=None)             # closed iff points[0] == points[-1]
 Circle(center, radius, *, normal=(0, 0, 1), label=None)  # 1D curve; any plane
+CircleArc(center, start, angle, *, normal=(0, 0, 1), label=None)  # signed sweep
+Path(*segments, label=None)                 # smooth ordered guide; Line/CircleArc segments
 Ellipse(center, rx, ry, *, normal=(0, 0, 1), x_axis=None, label=None)
 Polygon(points, *, label=None)              # any plane
 Rectangle(origin, dx, dy, *, label=None)    # axis-aligned; any constant z
@@ -133,6 +136,8 @@ Rules:
 - The ellipse frame is right-handed: `ry` lies along `normal × x_axis`. With the default normal and automatic x-axis, the public radii retain their original global-x/global-y meanings. The sign of `normal` controls OCC orientation.
 - An automatic x-axis is formed by projecting the global coordinate axis least aligned with the normal into the plane. `x_axis=None` remains stored as `None` so changing the normal recomputes the automatic basis.
 - Direction vectors use scale-safe normalization. An explicit x-axis must be perpendicular to the normal within `1e-12` after normalization; the small remaining normal component is projected out before realization.
+- `CircleArc` sweeps `start` around `center` by a signed `angle` about `normal` using the right-hand rule. The start radial must be perpendicular to `normal`, and `0 < abs(angle) < 2 * math.pi`; use `Circle` for a full circle.
+- `Path` is an ordered chain of two or more `Line` or `CircleArc` segments. Consecutive endpoints must coincide within `1e-7 * scale`, and consecutive tangents must agree within a sine tolerance of `1e-7`. A path whose first start and last end coincide is closed and must also be tangent-continuous at the closure. Segment labels are consumed; the `Path` label applies to every realized curve.
 - `Point` is rejected as a vertex coordinate; use `.coord`.
 - `label` is keyword-only, non-empty, stripped, at most 127 characters (a defensive cap; MSH 4.1 imposes no such limit), and must not contain quotes or newlines.
 - Shapes are frozen and hashable.
@@ -142,7 +147,7 @@ Rules:
 - An empty boolean result raises `GeometryError`.
 - `Difference(a, b, c)` means `a - (b ∪ c)`.
 - `Translate` and `Rotate` are unary shape nodes that preserve their operand's dimension. Nested transforms apply inside-out; rotation uses radians and the right-hand rule around a normalized axis.
-- `Extrude`, `Revolve`, and `ExtrudeAlong` increase their operand's dimension by one and accept operands of dimension at most 2. `Revolve` uses the same pivot, axis, and right-hand-rule convention as `Rotate`; its angle magnitude is at most `2 * math.pi`. `ExtrudeAlong` requires a guide that realizes as exactly one smooth curve; multi-segment, sharp, branching, and disconnected guides are rejected. Profile placement and orientation follow OCC pipe semantics.
+- `Extrude`, `Revolve`, and `ExtrudeAlong` increase their operand's dimension by one and accept operands of dimension at most 2. `Revolve` uses the same pivot, axis, and right-hand-rule convention as `Rotate`; its angle magnitude is at most `2 * math.pi`. `ExtrudeAlong` accepts either exactly one smooth guide curve or a tangent-continuous `Path`. Multi-curve `Union` and `Polyline` guides, sharp paths, branching, and disconnected guides are rejected; the error points to `Path` for multiple segments. Profile placement and orientation follow OCC pipe semantics.
 
 ### 6.2 Build
 
@@ -264,6 +269,8 @@ keyword operand forms are mutually exclusive.
 `Translate` and `Rotate` are frozen, hashable unary dataclass nodes with custom constructors that support `dataclasses.replace`. Each occurrence realizes its operand independently, transforms only those transient OCC entities, and returns the same top-level dimtags. Realization results are not cached or shared, and `occ.copy` is not used.
 
 `Extrude`, `Revolve`, and `ExtrudeAlong` follow the same frozen, hashable node pattern and support `dataclasses.replace`. Each occurrence realizes its operand (and guide) independently, calls one OCC operation, filters the returned entities to the result's top dimension, and removes the now-unused source and guide entities. Operation-local cleanup does not affect other occurrences of the same immutable shape.
+
+`Path` uses the same custom-constructor pattern: it accepts variadic segments plus a keyword-only `segments` tuple for `dataclasses.replace`. It realizes each segment independently and returns the individual curves; `ExtrudeAlong` builds the transient wire from them. `Path` does not create or track a wire itself.
 
 ### 7.2 Labels and physical groups
 
@@ -493,7 +500,9 @@ release lock
 | Point | `occ.addPoint` | 0 |
 | Line | `occ.addLine` | 1 |
 | Polyline | points + individual `occ.addLine` edges | 1 |
+| Path | individual segment realization; no wire | 1 |
 | Circle | `occ.addCircle` (r, normal + automatic in-plane axis) | 1 |
+| CircleArc | `occ.addCircleArc` (start, transient midpoint, end; `center=False`) | 1 |
 | Ellipse | `occ.addEllipse` (major/minor radii + oriented local major axis) | 1 |
 | Polygon | points + lines + `occ.addCurveLoop` + `occ.addPlaneSurface` | 2 |
 | Rectangle | `occ.addRectangle` | 2 |
@@ -516,7 +525,9 @@ Notes:
 - Transforms pass the operand's complete top-dimensional dimtag list to one OCC call, preserving shared topology across multi-entity operands. OCC may replace lower-dimensional boundary tags during a transform, so realization never caches those tags; final entity records are read after all operations.
 - Extrusions filter the OCC result to the target top dimension. `occ.extrude`, `occ.revolve`, and `occ.addPipe` also return caps, lateral faces, and other lower-dimensional entities; these are not tracked as the operation result.
 - After extrusion, the transient source is removed recursively. `ExtrudeAlong` also removes its guide. This cleanup is operation-local: it never deletes other independently realized occurrences or unrelated lower-dimensional shapes.
-- `ExtrudeAlong` passes a transient `addWire` container to `occ.addPipe` and requires the guide to realize as exactly one smooth curve. Lines, circles, ellipses, and revolution-generated arcs are supported. Multi-segment wires, sharp corners, branching, disconnected curves, and unsuitable profile placement are unsupported; OCC may otherwise return partial or degenerate geometry instead of raising.
+- `ExtrudeAlong` passes a transient `addWire` container to `occ.addPipe`. A guide may realize as exactly one smooth curve or as a tangent-continuous `Path`. Lines, circles, ellipses, circular arcs, and revolution-generated arcs are supported as single curves. Multi-curve `Union`/`Polyline` guides, sharp corners, branching, disconnected curves, and unsuitable profile placement are unsupported; OCC may otherwise return partial or degenerate geometry instead of raising. `Path` validates connectivity and tangency before Gmsh, so a valid path is safe to sweep.
+- `CircleArc` realizes through a transient midpoint point, which is removed immediately. This makes major arcs (up to but excluding a full turn) unambiguous.
+- `Path` realizes each segment independently and returns the individual curves; `ExtrudeAlong` assembles them into the transient wire.
 - A `Polygon` labels its surface, not its boundary curves.
 - `occ.synchronize()` is still required in Python. The Rust FFI wrapper is dropped, not the Gmsh synchronization call.
 - `fragment` is skipped when there are zero or one live entities; the label map is the identity in that case.
@@ -633,6 +644,8 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Point | Valid `Vec3` |
 | Line | Start ≠ end |
 | Polyline | ≥2 points; consecutive points distinct; closed iff first == last; closed form needs ≥3 distinct points |
+| CircleArc | Start ≠ center; finite nonzero `normal`; start radial perpendicular to `normal` within `1e-12`; finite nonzero `angle` with magnitude less than `2 * math.pi` |
+| Path | ≥2 `Line`/`CircleArc` segments; consecutive endpoints coincide within `1e-7 * scale`; consecutive tangents align within sine `1e-7`; closed paths also check the closure joint |
 | Circle | Radius > 0; finite nonzero `normal` |
 | Ellipse | `rx > 0`, `ry > 0`; finite nonzero `normal`; explicit `x_axis` finite, nonzero, and perpendicular to `normal` within `1e-12` |
 | Polygon | ≥3 points; all vertices distinct; no repeated final point; consecutive points distinct; non-collinear; planar within `1e-7 * scale` |
@@ -647,7 +660,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 | Rotate | One `Shape` operand; finite `angle`; valid `pivot`; finite nonzero `axis`, normalized scale-safely |
 | Extrude | One `Shape` operand of dimension at most 2; finite nonzero `offset` |
 | Revolve | One `Shape` operand of dimension at most 2; finite nonzero `angle` with magnitude at most `2 * math.pi`; valid `pivot`; finite nonzero `axis`, normalized scale-safely |
-| ExtrudeAlong | One `Shape` operand of dimension at most 2; one 1D `Shape` guide that realizes as exactly one smooth curve |
+| ExtrudeAlong | One `Shape` operand of dimension at most 2; one 1D `Shape` guide that realizes as exactly one smooth curve or a tangent-continuous `Path` |
 | Labels | Non-empty, stripped, ≤127 chars, no quotes/newlines |
 | Build | Non-empty shape sequence; required settings |
 
@@ -658,12 +671,14 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Port Rust primitives and pipeline tests.
 - Every primitive realizes the correct top-dimensional entity/entities and meshes with its group.
 - Oriented circle/ellipse/disk tests cover vertical and oblique planes, explicit and automatic in-plane axes, both radius orderings, both normal signs, invalid frames, and scale-safe direction normalization.
+- `CircleArc` tests cover positive and negative sweeps, major arcs, arbitrary planes, tangents, full-turn rejection, invalid frames, and `dataclasses.replace`.
+- `Path` tests cover ordered line/arc composition, connectivity, tangent continuity, closed paths and closure validation, invalid segment types, label consumption, and `dataclasses.replace`.
 - Union/intersection/difference on overlapping boxes; volume checks.
 - Box minus sphere ≈ 0.966.
 - Two overlapping boxes fragment into three conformal pieces.
 - Nested `(a - b) + c`.
 - Transform tests cover all dimensions, arbitrary rotation axes and pivots, nested ordering, transforms around and inside booleans, multi-entity topology, shape reuse, identity operations, label consumption, fragmentation, and invalid inputs.
-- Extrusion tests cover all dimension transitions, output filtering, source and guide cleanup, partial and full revolution, negative angles, straight and circular guides, revolution-generated arcs, torus volume, multi-entity profiles, boolean composition, label consumption, fragmentation, and invalid inputs. A multi-segment guide is rejected explicitly.
+- Extrusion tests cover all dimension transitions, output filtering, source and guide cleanup, partial and full revolution, negative angles, straight and circular guides, circular arcs (positive, negative, and major), revolution-generated arcs, smooth rebar paths, closed paths, torus volume, multi-entity profiles, boolean composition, label consumption, fragmentation, and invalid inputs. Multi-segment `Polyline` and `Union` guides are rejected explicitly with an error pointing to `Path`.
 - Line-in-box mixed-dimension fragment.
 - Overlapping-group test described in §8.2.
 - Label merge test: same label and dimension produce one group containing both entities.
@@ -676,6 +691,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Node lookup tests for scalar, empty, 1-D, and `(M, k)` queries; all three strategies; memory thresholds; cache reuse; missing and duplicate tags; strict input types; frozen inputs; and coordinate copy semantics.
 - Flat-view tests for sparse tags, multiple and empty blocks, slice and tag alignment, read-only cached views, group selections, overlapping groups, and both built and MSH-read meshes. Cache identity and single-block tag sharing guard against repeated or unnecessary concatenation; §7.5 documents the construction and reuse costs.
 - `examples/block_views.py` demonstrates flat element-type views, entity slices, and physical-group element/node row selections.
+- `examples/rebar_hook.py` demonstrates one swept rebar solid combining a straight segment, a 90° circular hook, and a tail.
 - `benchmarks/node_lookup.py` is a manual, non-CI benchmark covering contiguous, unsorted contiguous, mildly sparse, highly sparse, and random-order tags at `1e3`, `1e5`, `1e6`, and `1e7` nodes with scalar and `1`/`1e3`/`1e6`-tag queries. Run the full matrix with `uv run python benchmarks/node_lookup.py` or a small smoke run with `--quick`.
 - Main-thread-only build guard (worker thread without Gmsh raises a clear error); worker-thread builds with Gmsh pre-initialized serialize.
 - Settings validation and `with_` test.
@@ -703,7 +719,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Scaling and general affine transformations
 - General placement-frame abstraction and arbitrary orientation for `Rectangle`
 - Cone, Torus
-- Sweeping along sharp or multi-segment guide paths
+- Sweeping along sharp guide paths
 - Fillet/Chamfer
 - STEP import
 - Mesh size fields
@@ -723,6 +739,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 5. **Gmsh version metadata**: `gmsh_version` is available only for builds, not for MSH4 reads.
 6. **Label loss in booleans, transforms, and extrusions** is silent and documented.
 7. **Static element enum**: only the curated `ElementType` members are supported; unknown type codes are tolerated on read (skipped by reading the per-element node width from the first element line) but rejected by the writer and the `ElementType`-keyed API.
+8. **Path scope**: segments are limited to `Line` and `CircleArc`; a `Path` cannot be transformed or contain a full `Circle`. Orient the swept result rather than the guide.
 
 ## 18. Next steps
 

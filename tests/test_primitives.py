@@ -15,18 +15,22 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
+import math
+
 import numpy as np
 import pytest
 
 from shapemesh import (
     Box,
     Circle,
+    CircleArc,
     Cylinder,
     Disk,
     Ellipse,
     EllipticalDisk,
     Line,
     MeshSettings,
+    Path,
     Point,
     Polygon,
     Polyline,
@@ -40,6 +44,7 @@ _CASES = [
     (Line((0, 0, 0), (1, 0, 0)), 1, 1),
     (Polyline([(0, 0, 0), (1, 0, 0), (1, 1, 0)]), 1, 2),
     (Circle((0, 0, 0), 1), 1, 1),
+    (CircleArc((0, 0, 0), (1, 0, 0), math.pi / 2), 1, 1),
     (Ellipse((0, 0, 0), 2, 1), 1, 1),
     (Polygon([(0, 0, 0), (1, 0, 0), (1, 1, 0)]), 2, 1),
     (Rectangle((0, 0, 0), 1, 1), 2, 1),
@@ -55,6 +60,7 @@ _IDS = [
     "line",
     "polyline",
     "circle",
+    "circle_arc",
     "ellipse",
     "polygon",
     "rectangle",
@@ -154,6 +160,35 @@ def test_ellipse_in_oblique_plane(shape_type):
         np.testing.assert_allclose(ellipse_equation, 1, rtol=0, atol=1e-8)
     else:
         assert np.all(ellipse_equation <= 1 + 1e-8)
+
+
+def test_circle_arc_meshing_bbox():
+    arc = CircleArc((0, 0, 0), (1, 0, 0), math.pi / 2, label="arc")
+    mesh = build(arc, MeshSettings())
+
+    assert mesh.metadata.dim == 1
+    assert mesh.bbox == pytest.approx((0, 0, 0, 1, 1, 0), abs=1e-6)
+    assert len(mesh.physical_group("arc", 1).entities) == 1
+
+
+def test_path_meshing_and_labeling():
+    line = Line((0, 0, 0), (0, 0, 2), label="segment")
+    arc = CircleArc(
+        (0.5, 0, 2),
+        (0, 0, 2),
+        math.pi / 2,
+        normal=(0, 1, 0),
+        label="segment",
+    )
+    tail = Line((0.5, 0, 2.5), (1.0, 0, 2.5), label="segment")
+    path = Path(line, arc, tail, label="guide")
+    mesh = build(path, MeshSettings())
+
+    assert mesh.metadata.dim == 1
+    assert len(mesh.entities(dim=1)) == 3
+    assert len(mesh.physical_group("guide", 1).entities) == 3
+    with pytest.raises(KeyError):
+        mesh.physical_group("segment", 1)
 
 
 def test_primitive_group_labeling():

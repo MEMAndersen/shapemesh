@@ -24,6 +24,7 @@ import pytest
 from shapemesh import (
     Box,
     Circle,
+    CircleArc,
     Disk,
     ElementType,
     Ellipse,
@@ -32,6 +33,7 @@ from shapemesh import (
     GeometryError,
     Line,
     MeshSettings,
+    Path,
     Point,
     Polygon,
     Polyline,
@@ -338,6 +340,66 @@ def test_extrude_along_revolution_generated_arc():
     assert _mesh_volume(mesh) == pytest.approx(expected_volume, rel=0.1)
 
 
+@pytest.mark.parametrize(
+    ("angle", "expected_bbox"),
+    [
+        (math.pi / 2, (0, 0, -0.1, 1.1, 1.1, 0.1)),
+        (-math.pi / 2, (0, -1.1, -0.1, 1.1, 0, 0.1)),
+        (3 * math.pi / 2, (-1.1, -1.1, -0.1, 1.1, 1.1, 0.1)),
+        (-3 * math.pi / 2, (-1.1, -1.1, -0.1, 1.1, 1.1, 0.1)),
+    ],
+    ids=["quarter", "negative-quarter", "major", "negative-major"],
+)
+def test_extrude_along_circle_arc_guide(angle, expected_bbox):
+    radius = 0.1
+    arc = CircleArc((0, 0, 0), (1, 0, 0), angle)
+    profile = Disk(center=(1, 0, 0), radius=radius, normal=(0, 1, 0))
+    mesh = build(ExtrudeAlong(profile, arc), MeshSettings(element_size=0.05))
+
+    expected_volume = math.pi * radius**2 * abs(angle)
+    entity = mesh.entities(dim=3)[0]
+    assert entity.bbox == pytest.approx(expected_bbox, abs=0.01)
+    assert _mesh_volume(mesh) == pytest.approx(expected_volume, rel=0.1)
+
+
+def test_extrude_along_rebar_path():
+    radius = 0.1
+    path = Path(
+        Line((0, 0, 0), (0, 0, 2)),
+        CircleArc((0.5, 0, 2), (0, 0, 2), math.pi / 2, normal=(0, 1, 0)),
+        Line((0.5, 0, 2.5), (1.0, 0, 2.5)),
+        label="guide",
+    )
+    profile = Disk(center=(0, 0, 0), radius=radius, normal=(0, 0, 1))
+    mesh = build(
+        ExtrudeAlong(profile, path, label="rebar"),
+        MeshSettings(element_size=0.05),
+    )
+
+    length = 2 + math.pi / 2 * 0.5 + 0.5
+    assert mesh.bbox == pytest.approx((-0.1, -0.1, 0, 1.0, 0.1, 2.6), abs=1e-6)
+    assert _mesh_volume(mesh) == pytest.approx(math.pi * radius**2 * length, rel=0.05)
+    assert len(mesh.physical_group("rebar", 3).entities) == 1
+
+
+def test_extrude_along_closed_path():
+    radius = 0.1
+    path = Path(
+        CircleArc((0, 0, 0), (1, 0, 0), math.pi, normal=(0, 0, 1)),
+        CircleArc((0, 0, 0), (-1, 0, 0), math.pi, normal=(0, 0, 1)),
+    )
+    profile = Disk(center=(1, 0, 0), radius=radius, normal=(0, 1, 0))
+    mesh = build(
+        ExtrudeAlong(profile, path),
+        MeshSettings(element_size=0.05),
+    )
+
+    expected_volume = 2 * math.pi**2 * radius**2
+    entity = mesh.entities(dim=3)[0]
+    assert entity.bbox == pytest.approx((-1.1, -1.1, -0.1, 1.1, 1.1, 0.1), abs=1e-6)
+    assert _mesh_volume(mesh) == pytest.approx(expected_volume, rel=0.1)
+
+
 def test_extrude_along_multi_entity_profile():
     profile = Union(
         Rectangle((0, 0), 1, 1),
@@ -357,10 +419,31 @@ def test_extrude_along_rejects_multi_segment_guide():
         build(ExtrudeAlong(profile, guide), MeshSettings())
 
 
+def test_extrude_along_rejects_union_guide():
+    profile = Rectangle((0, 0), 1, 1)
+    guide = Union(
+        Line((0, 0, 0), (0, 0, 2)),
+        CircleArc((0.5, 0, 2), (0, 0, 2), math.pi / 2, normal=(0, 1, 0)),
+    )
+    with pytest.raises(GeometryError, match="Path"):
+        build(ExtrudeAlong(profile, guide), MeshSettings())
+
+
 def test_extrude_along_consumes_profile_and_guide_labels():
     profile = Rectangle((0, 0), 1, 1, label="profile")
     guide = Line((0, 0, 0), (0, 0, 1), label="guide")
     mesh = build(ExtrudeAlong(profile, guide), MeshSettings())
+    assert mesh.groups == ()
+
+
+def test_extrude_along_consumes_path_and_segment_labels():
+    profile = Disk((0, 0, 0), 0.1, label="profile")
+    path = Path(
+        Line((0, 0, 0), (0, 0, 1), label="segment"),
+        Line((0, 0, 1), (0, 0, 2), label="segment"),
+        label="guide",
+    )
+    mesh = build(ExtrudeAlong(profile, path), MeshSettings())
     assert mesh.groups == ()
 
 
@@ -378,6 +461,21 @@ def test_guide_can_be_reused_independently():
     mesh = build([guide, swept], MeshSettings())
 
     assert len(mesh.physical_group("guide", 1).entities) == 1
+    assert len(mesh.physical_group("swept", 3).entities) == 1
+    assert len(mesh.entities(dim=3)) == 1
+
+
+def test_path_guide_can_be_reused_independently():
+    profile = Rectangle((1, 0), 1, 1)
+    path = Path(
+        Line((0, 0, 0), (0, 0, 1)),
+        Line((0, 0, 1), (0, 0, 2)),
+        label="guide",
+    )
+    swept = ExtrudeAlong(profile, path, label="swept")
+    mesh = build([path, swept], MeshSettings())
+
+    assert len(mesh.physical_group("guide", 1).entities) == 2
     assert len(mesh.physical_group("swept", 3).entities) == 1
     assert len(mesh.entities(dim=3)) == 1
 

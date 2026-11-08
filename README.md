@@ -21,15 +21,17 @@ belonging to each labelled shape.
 
 ## Features
 
-- **12 shape primitives:** `Point`, `Line`, `Polyline`, `Circle`, `Ellipse`,
-  `Polygon`, `Rectangle`, `Disk`, `EllipticalDisk`, `Sphere`, `Box`, `Cylinder`.
-  Missing something? Open an issue — the v1 set is intentionally small.
+- **13 shape primitives:** `Point`, `Line`, `Polyline`, `Circle`, `CircleArc`,
+  `Ellipse`, `Polygon`, `Rectangle`, `Disk`, `EllipticalDisk`, `Sphere`, `Box`,
+  `Cylinder`. Missing something? Open an issue — the v1 set is intentionally
+  small.
 - **n-ary booleans:** `Union`, `Intersection`, `Difference` with variadic or
   sequence constructors.
 - **Rigid transforms:** `Translate` and `Rotate` compose with primitives and
   booleans in the immutable shape graph.
-- **Extrusions:** `Extrude`, `Revolve`, and smooth-guide `ExtrudeAlong` raise a
-  0D–2D shape's dimension by one and compose with the rest of the graph.
+- **Extrusions:** `Extrude`, `Revolve`, and `ExtrudeAlong` raise a 0D–2D shape's
+  dimension by one. `ExtrudeAlong` accepts one smooth guide curve or a
+  tangent-continuous `Path` composed of `Line` and `CircleArc` segments.
 - **Overlapping physical groups:** labels are preserved across Gmsh fragment
   remapping, so an intersection volume can belong to multiple groups.
 - **MSH 4.1 ASCII I/O:** read and write entity-classified meshes, with or
@@ -102,6 +104,7 @@ Examples covering structural workflows and element-node data access live in
 - [`examples/block_views.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/block_views.py)
 - [`examples/transforms.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/transforms.py)
 - [`examples/extrusions.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/extrusions.py)
+- [`examples/rebar_hook.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/rebar_hook.py)
 
 ## Documentation
 
