@@ -345,6 +345,15 @@ def test_circle_arc_rejects_invalid_geometry(kwargs):
         CircleArc(**kwargs)
 
 
+def test_path_accepts_a_segment_sequence():
+    line = Line((0, 0, 0), (0, 0, 1))
+    arc = CircleArc((1, 0, 1), (0, 0, 1), math.pi / 2, normal=(0, 1, 0))
+
+    assert Path([line, arc]).segments == (line, arc)
+    assert Path((line, arc)).segments == (line, arc)
+    assert Path(line, arc).segments == (line, arc)
+
+
 def test_path_connects_line_and_arc():
     line = Line((0, 0, 0), (0, 0, 2))
     arc = CircleArc((0.5, 0, 2), (0, 0, 2), math.pi / 2, normal=(0, 1, 0))
@@ -377,6 +386,10 @@ def test_path_rejects_invalid_segments():
         Path(line)
     with pytest.raises(GeometryError, match="Shape"):
         Path(line, "not a shape")
+    with pytest.raises(GeometryError, match="Shape"):
+        Path("not a shape")
+    with pytest.raises(GeometryError, match="Shape"):
+        Path(segment for segment in (line, line))
     with pytest.raises(GeometryError, match="Line or CircleArc"):
         Path(line, Point((0, 0, 1)))
     with pytest.raises(GeometryError, match="Line or CircleArc"):

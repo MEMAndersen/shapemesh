@@ -31,7 +31,8 @@ belonging to each labelled shape.
   booleans in the immutable shape graph.
 - **Extrusions:** `Extrude`, `Revolve`, and `ExtrudeAlong` raise a 0D–2D shape's
   dimension by one. `ExtrudeAlong` accepts one smooth guide curve or a
-  tangent-continuous `Path` composed of `Line` and `CircleArc` segments.
+  tangent-continuous `Path` composed of `Line` and `CircleArc` segments,
+  passed variadically or as a single sequence.
 - **Overlapping physical groups:** labels are preserved across Gmsh fragment
   remapping, so an intersection volume can belong to multiple groups.
 - **MSH 4.1 ASCII I/O:** read and write entity-classified meshes, with or

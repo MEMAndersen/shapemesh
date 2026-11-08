@@ -740,6 +740,23 @@ class CircleArc(Shape):
 type PathSegment = Line | CircleArc
 
 
+def _coerce_path_segments(
+    segments: tuple[Shape | Sequence[Shape], ...],
+) -> tuple[Shape, ...]:
+    """Flatten a single-sequence path argument into individual segments.
+
+    Paths accept either variadic segments (``Path(line, arc)``) or a single
+    sequence (``Path([line, arc])``), matching the boolean constructors.
+    """
+    if len(segments) == 1:
+        single = segments[0]
+        if isinstance(single, (str, bytes)):
+            raise GeometryError("Path segments must be Shape instances or a sequence of Shape")
+        if isinstance(single, Sequence):
+            return tuple(single)
+    return cast(tuple[Shape, ...], segments)
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class Path(Shape):
     """An ordered, tangent-continuous chain of one-dimensional segments.
@@ -750,7 +767,9 @@ class Path(Shape):
     supported multi-segment guide for `ExtrudeAlong`.
 
     Args:
-        segments: Two or more `Line` or `CircleArc` segments in path order.
+        segments: Two or more `Line` or `CircleArc` segments in path order,
+            passed either variadically (``Path(line, arc)``) or as one
+            sequence (``Path([line, arc])``).
         label: An optional physical-group name.
 
     Raises:
@@ -764,21 +783,23 @@ class Path(Shape):
 
     def __init__(
         self,
-        *args: Shape,
+        *args: Shape | Sequence[Shape],
         segments: tuple[Shape, ...] | None = None,
         label: str | None = None,
     ) -> None:
         if segments is not None:
             if args:
                 raise TypeError("segments cannot be supplied both positionally and by keyword")
-            args = segments
+            args = (segments,)
         object.__setattr__(self, "label", label)
-        object.__setattr__(self, "segments", cast(tuple[PathSegment, ...], tuple(args)))
+        object.__setattr__(
+            self,
+            "segments",
+            cast(tuple[PathSegment, ...], _coerce_path_segments(args)),
+        )
         self.__post_init__()
 
     def __post_init__(self) -> None:
-        if len(self.segments) < 2:
-            raise GeometryError("Path requires at least 2 segments")
         for segment in self.segments:
             if not isinstance(segment, Shape):
                 raise GeometryError(
@@ -786,6 +807,8 @@ class Path(Shape):
                 )
             if not isinstance(segment, (Line, CircleArc)):
                 raise GeometryError("Path segments must be Line or CircleArc instances")
+        if len(self.segments) < 2:
+            raise GeometryError("Path requires at least 2 segments")
         scale = self._scale()
         for previous, current in pairwise(self.segments):
             if (previous.end - current.start).length() > CONNECTIVITY_TOLERANCE * scale:

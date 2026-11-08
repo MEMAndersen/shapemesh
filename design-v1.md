@@ -108,7 +108,7 @@ Line(start, end, *, label=None)
 Polyline(points, *, label=None)             # closed iff points[0] == points[-1]
 Circle(center, radius, *, normal=(0, 0, 1), label=None)  # 1D curve; any plane
 CircleArc(center, start, angle, *, normal=(0, 0, 1), label=None)  # signed sweep
-Path(*segments, label=None)                 # smooth ordered guide; Line/CircleArc segments
+Path(*segments, label=None)                 # variadic or one sequence; Line/CircleArc
 Ellipse(center, rx, ry, *, normal=(0, 0, 1), x_axis=None, label=None)
 Polygon(points, *, label=None)              # any plane
 Rectangle(origin, dx, dy, *, label=None)    # axis-aligned; any constant z
@@ -137,7 +137,7 @@ Rules:
 - An automatic x-axis is formed by projecting the global coordinate axis least aligned with the normal into the plane. `x_axis=None` remains stored as `None` so changing the normal recomputes the automatic basis.
 - Direction vectors use scale-safe normalization. An explicit x-axis must be perpendicular to the normal within `1e-12` after normalization; the small remaining normal component is projected out before realization.
 - `CircleArc` sweeps `start` around `center` by a signed `angle` about `normal` using the right-hand rule. The start radial must be perpendicular to `normal`, and `0 < abs(angle) < 2 * math.pi`; use `Circle` for a full circle.
-- `Path` is an ordered chain of two or more `Line` or `CircleArc` segments. Consecutive endpoints must coincide within `1e-7 * scale`, and consecutive tangents must agree within a sine tolerance of `1e-7`. A path whose first start and last end coincide is closed and must also be tangent-continuous at the closure. Segment labels are consumed; the `Path` label applies to every realized curve.
+- `Path` is an ordered chain of two or more `Line` or `CircleArc` segments, passed either variadically (``Path(line, arc)``) or as one sequence (``Path([line, arc])``), matching the boolean constructors. Consecutive endpoints must coincide within `1e-7 * scale`, and consecutive tangents must agree within a sine tolerance of `1e-7`. A path whose first start and last end coincide is closed and must also be tangent-continuous at the closure. Segment labels are consumed; the `Path` label applies to every realized curve.
 - `Point` is rejected as a vertex coordinate; use `.coord`.
 - `label` is keyword-only, non-empty, stripped, at most 127 characters (a defensive cap; MSH 4.1 imposes no such limit), and must not contain quotes or newlines.
 - Shapes are frozen and hashable.
@@ -270,7 +270,7 @@ keyword operand forms are mutually exclusive.
 
 `Extrude`, `Revolve`, and `ExtrudeAlong` follow the same frozen, hashable node pattern and support `dataclasses.replace`. Each occurrence realizes its operand (and guide) independently, calls one OCC operation, filters the returned entities to the result's top dimension, and removes the now-unused source and guide entities. Operation-local cleanup does not affect other occurrences of the same immutable shape.
 
-`Path` uses the same custom-constructor pattern: it accepts variadic segments plus a keyword-only `segments` tuple for `dataclasses.replace`. It realizes each segment independently and returns the individual curves; `ExtrudeAlong` builds the transient wire from them. `Path` does not create or track a wire itself.
+`Path` uses the same custom-constructor pattern: it accepts variadic segments or a single sequence, plus a keyword-only `segments` tuple for `dataclasses.replace`. It realizes each segment independently and returns the individual curves; `ExtrudeAlong` builds the transient wire from them. `Path` does not create or track a wire itself.
 
 ### 7.2 Labels and physical groups
 
@@ -672,7 +672,7 @@ Build two overlapping labeled boxes, write 4.1, reopen with Gmsh, then reopen wi
 - Every primitive realizes the correct top-dimensional entity/entities and meshes with its group.
 - Oriented circle/ellipse/disk tests cover vertical and oblique planes, explicit and automatic in-plane axes, both radius orderings, both normal signs, invalid frames, and scale-safe direction normalization.
 - `CircleArc` tests cover positive and negative sweeps, major arcs, arbitrary planes, tangents, full-turn rejection, invalid frames, and `dataclasses.replace`.
-- `Path` tests cover ordered line/arc composition, connectivity, tangent continuity, closed paths and closure validation, invalid segment types, label consumption, and `dataclasses.replace`.
+- `Path` tests cover variadic and sequence construction, ordered line/arc composition, connectivity, tangent continuity, closed paths and closure validation, invalid segment types, label consumption, and `dataclasses.replace`.
 - Union/intersection/difference on overlapping boxes; volume checks.
 - Box minus sphere ≈ 0.966.
 - Two overlapping boxes fragment into three conformal pieces.
