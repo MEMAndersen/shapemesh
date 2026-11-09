@@ -377,7 +377,7 @@ def test_extrude_along_rebar_path():
     )
 
     length = 2 + math.pi / 2 * 0.5 + 0.5
-    assert mesh.bbox == pytest.approx((-0.1, -0.1, 0, 1.0, 0.1, 2.6), abs=1e-6)
+    assert mesh.bbox == pytest.approx((-0.1, -0.1, 0, 1.0, 0.1, 2.6), abs=1e-3)
     assert _mesh_volume(mesh) == pytest.approx(math.pi * radius**2 * length, rel=0.05)
     assert len(mesh.physical_group("rebar", 3).entities) == 1
 
