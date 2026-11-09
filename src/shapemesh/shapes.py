@@ -57,8 +57,10 @@ __all__ = [
     "Polygon",
     "Polyline",
     "Rectangle",
+    "Rotate",
     "Shape",
     "Sphere",
+    "Translate",
     "Union",
     "Vec3",
     "Vec3Like",
@@ -81,7 +83,7 @@ def _validate_label(label: str | None) -> str | None:
     return stripped
 
 
-def _positive_float(value: object, name: str) -> float:
+def _finite_float(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise GeometryError(f"{name} must be a real number, got {type(value).__name__}")
     try:
@@ -90,6 +92,11 @@ def _positive_float(value: object, name: str) -> float:
         raise GeometryError(f"{name} must be representable as a float, got {value!r}") from exc
     if not math.isfinite(converted):
         raise GeometryError(f"{name} must be finite, got {value}")
+    return converted
+
+
+def _positive_float(value: object, name: str) -> float:
+    converted = _finite_float(value, name)
     if converted <= 0:
         raise GeometryError(f"{name} must be positive, got {value}")
     return converted
@@ -1144,3 +1151,121 @@ def _validate_boolean_operands(operands: tuple[Shape, ...]) -> None:
             )
     if len({op.dimension for op in operands}) != 1:
         raise GeometryError("boolean operands must share the same topological dimension")
+
+
+# -- rigid transforms -------------------------------------------------------
+
+
+def _validate_transform_operand(operand: Shape) -> None:
+    if not isinstance(operand, Shape):
+        raise GeometryError(
+            f"transform operand must be a Shape instance, got {type(operand).__name__}"
+        )
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Translate(Shape):
+    """Translation of a shape by an offset.
+
+    The operand is realized first and its transient OCC entities are then translated. The operand's
+    label is consumed; only the transform node's own label is used.
+
+    Args:
+        operand: The shape to translate.
+        offset: The translation offset.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``operand`` is not a shape or ``offset`` is invalid.
+        LabelError: If ``label`` is invalid.
+    """
+
+    operand: Shape
+    offset: Vec3
+
+    def __init__(self, operand: Shape, offset: Vec3Like, *, label: str | None = None) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "operand", operand)
+        object.__setattr__(self, "offset", Vec3.from_any(offset))
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_transform_operand(self.operand)
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the transformed shape."""
+        return self.operand.dimension
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        dimtags = self.operand._realize(gmsh)
+        gmsh.model.occ.translate(dimtags, self.offset.x, self.offset.y, self.offset.z)
+        return dimtags
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Rotate(Shape):
+    """Rotation of a shape around an arbitrary axis.
+
+    The angle follows the right-hand rule around the directed axis. The operand is realized first
+    and its transient OCC entities are then rotated. The operand's label is consumed; only the
+    transform node's own label is used.
+
+    Args:
+        operand: The shape to rotate.
+        angle: The rotation angle in radians.
+        pivot: A point on the rotation axis. The default is the global origin.
+        axis: The rotation-axis direction (nonzero). The default is the global z-axis.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``operand`` is not a shape or the rotation geometry is invalid.
+        LabelError: If ``label`` is invalid.
+    """
+
+    operand: Shape
+    angle: float
+    pivot: Vec3
+    axis: Vec3
+
+    def __init__(
+        self,
+        operand: Shape,
+        angle: float,
+        *,
+        pivot: Vec3Like = (0, 0, 0),
+        axis: Vec3Like = (0, 0, 1),
+        label: str | None = None,
+    ) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "operand", operand)
+        object.__setattr__(self, "angle", angle)
+        object.__setattr__(self, "pivot", Vec3.from_any(pivot))
+        object.__setattr__(self, "axis", axis)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        _validate_transform_operand(self.operand)
+        object.__setattr__(self, "angle", _finite_float(self.angle, "angle"))
+        object.__setattr__(self, "axis", _normalize_direction(self.axis, "axis"))
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the transformed shape."""
+        return self.operand.dimension
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        dimtags = self.operand._realize(gmsh)
+        gmsh.model.occ.rotate(
+            dimtags,
+            self.pivot.x,
+            self.pivot.y,
+            self.pivot.z,
+            self.axis.x,
+            self.axis.y,
+            self.axis.z,
+            self.angle,
+        )
+        return dimtags
