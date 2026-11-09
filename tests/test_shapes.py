@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with shapemesh. If not, see <https://www.gnu.org/licenses/>.
 
+import math
 import warnings
 from dataclasses import replace
 from fractions import Fraction
@@ -26,6 +27,7 @@ from shapemesh import (
     Box,
     BuildError,
     Circle,
+    CircleArc,
     Cylinder,
     Difference,
     Disk,
@@ -35,6 +37,7 @@ from shapemesh import (
     Intersection,
     LabelError,
     Line,
+    Path,
     Point,
     Polygon,
     Polyline,
@@ -275,6 +278,144 @@ def test_replace_recomputes_automatic_ellipse_axis():
     replaced = replace(ellipse, normal=(1, 0, 0))
     assert replaced.normal == Vec3(1, 0, 0)
     assert replaced.x_axis is None
+
+
+# --- arcs and paths -------------------------------------------------------
+
+
+def _assert_vec3(actual, expected):
+    expected = Vec3.from_any(expected)
+    assert (actual.x, actual.y, actual.z) == pytest.approx((expected.x, expected.y, expected.z))
+
+
+def test_circle_arc_geometry():
+    arc = CircleArc((0, 0, 0), (1, 0, 0), math.pi / 2)
+    assert arc.dimension == 1
+    assert arc.radius == pytest.approx(1.0)
+    _assert_vec3(arc.end, (0, 1, 0))
+    _assert_vec3(arc.start_tangent, (0, 1, 0))
+    _assert_vec3(arc.end_tangent, (-1, 0, 0))
+
+    reverse = CircleArc((0, 0, 0), (1, 0, 0), -math.pi / 2)
+    _assert_vec3(reverse.end, (0, -1, 0))
+    _assert_vec3(reverse.start_tangent, (0, -1, 0))
+    _assert_vec3(reverse.end_tangent, (-1, 0, 0))
+
+    semicircle = CircleArc((0, 0, 0), (1, 0, 0), math.pi)
+    _assert_vec3(semicircle.end, (-1, 0, 0))
+    _assert_vec3(semicircle.end_tangent, (0, -1, 0))
+
+
+def test_circle_arc_normalizes_normal_and_supports_replace():
+    arc = CircleArc((0, 0, 0), (1, 0, 0), math.pi / 2, normal=(0, 0, 10), label="arc")
+    assert arc.normal == Vec3(0, 0, 1)
+    assert arc.label == "arc"
+
+    replaced = replace(arc, angle=math.pi, label="replaced")
+    assert replaced.angle == math.pi
+    assert replaced.label == "replaced"
+    _assert_vec3(replaced.end, (-1, 0, 0))
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"center": (0, 0, 0), "start": (0, 0, 0), "angle": math.pi / 2},
+        {"center": (0, 0, 0), "start": (1, 0, 0), "angle": 0.0},
+        {"center": (0, 0, 0), "start": (1, 0, 0), "angle": 2 * math.pi},
+        {"center": (0, 0, 0), "start": (1, 0, 0), "angle": -2 * math.pi},
+        {"center": (0, 0, 0), "start": (1, 0, 0), "angle": math.nan},
+        {"center": (0, 0, 0), "start": (1, 0, 0), "angle": math.inf},
+        {
+            "center": (0, 0, 0),
+            "start": (1, 0, 0),
+            "angle": math.pi / 2,
+            "normal": (0, 0, 0),
+        },
+        {
+            "center": (0, 0, 0),
+            "start": (1, 0, 0),
+            "angle": math.pi / 2,
+            "normal": (1, 0, 0),
+        },
+    ],
+)
+def test_circle_arc_rejects_invalid_geometry(kwargs):
+    with pytest.raises(GeometryError):
+        CircleArc(**kwargs)
+
+
+def test_path_accepts_a_segment_sequence():
+    line = Line((0, 0, 0), (0, 0, 1))
+    arc = CircleArc((1, 0, 1), (0, 0, 1), math.pi / 2, normal=(0, 1, 0))
+
+    assert Path([line, arc]).segments == (line, arc)
+    assert Path((line, arc)).segments == (line, arc)
+    assert Path(line, arc).segments == (line, arc)
+
+
+def test_path_connects_line_and_arc():
+    line = Line((0, 0, 0), (0, 0, 2))
+    arc = CircleArc((0.5, 0, 2), (0, 0, 2), math.pi / 2, normal=(0, 1, 0))
+    tail = Line((0.5, 0, 2.5), (1.0, 0, 2.5))
+    path = Path(line, arc, tail, label="guide")
+
+    assert path.dimension == 1
+    assert path.segments == (line, arc, tail)
+    assert path.label == "guide"
+    assert path.start == Vec3(0, 0, 0)
+    _assert_vec3(path.end, (1.0, 0, 2.5))
+    assert path.closed is False
+
+
+def test_path_closed_and_closure_tangency():
+    first = CircleArc((0, 0, 0), (1, 0, 0), math.pi, normal=(0, 0, 1))
+    second = CircleArc((0, 0, 0), (-1, 0, 0), math.pi, normal=(0, 0, 1))
+    assert Path(first, second).closed is True
+
+    line = Line((0, 0, 0), (1, 0, 0))
+    bend = CircleArc((1, 1, 0), (1, 0, 0), math.pi / 2)
+    return_arc = CircleArc((0.75, 1, 0), (2, 1, 0), 2 * math.pi - math.acos(-0.6))
+    with pytest.raises(GeometryError, match="closure"):
+        Path(line, bend, return_arc)
+
+
+def test_path_rejects_invalid_segments():
+    line = Line((0, 0, 0), (0, 0, 1))
+    with pytest.raises(GeometryError, match="at least 2"):
+        Path(line)
+    with pytest.raises(GeometryError, match="Shape"):
+        Path(line, "not a shape")
+    with pytest.raises(GeometryError, match="Shape"):
+        Path("not a shape")
+    with pytest.raises(GeometryError, match="Shape"):
+        Path(segment for segment in (line, line))
+    with pytest.raises(GeometryError, match="Line or CircleArc"):
+        Path(line, Point((0, 0, 1)))
+    with pytest.raises(GeometryError, match="Line or CircleArc"):
+        Path(line, Polyline([(0, 0, 1), (1, 0, 1)]))
+    with pytest.raises(GeometryError, match="connect"):
+        Path(line, Line((0.1, 0, 1), (0.1, 0, 2)))
+    with pytest.raises(GeometryError, match="tangent-continuous"):
+        Path(line, Line((0, 0, 1), (1, 0, 1)))
+    with pytest.raises(GeometryError, match="tangent-continuous"):
+        Path(line, Line((0, 0, 1), (0, 0, 0)))
+
+
+def test_path_dataclass_replace():
+    line = Line((0, 0, 0), (0, 0, 1))
+    arc = CircleArc((1, 0, 1), (0, 0, 1), math.pi / 2, normal=(0, 1, 0))
+    path = Path(line, arc, label="original")
+
+    renamed = replace(path, label="renamed")
+    assert renamed.segments == (line, arc)
+    assert renamed.label == "renamed"
+
+    rebuilt = replace(path, segments=(line, arc))
+    assert rebuilt.segments == (line, arc)
+
+    with pytest.raises(TypeError, match="both"):
+        Path(line, segments=(arc,))
 
 
 def test_volume_primitives():

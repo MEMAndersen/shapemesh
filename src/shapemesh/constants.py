@@ -29,6 +29,14 @@ COLLINEARITY_TOLERANCE = 1e-7
 # absolute value of their dot product is below this dimensionless tolerance.
 PLANE_ORTHOGONALITY_TOLERANCE = 1e-12
 
+# Consecutive path endpoints are considered coincident when their distance is
+# below this fraction of the path's bounding-box diagonal.
+CONNECTIVITY_TOLERANCE = 1e-7
+
+# Consecutive path tangents are considered continuous when the sine of the
+# angle between them is below this dimensionless tolerance.
+TANGENCY_TOLERANCE = 1e-7
+
 # `General.Terminal` is a gmsh verbosity level (0 = silent, higher = more
 # verbose), not a binary toggle. shapemesh is silent by default and uses
 # gmsh's normal level when `verbose` is set.

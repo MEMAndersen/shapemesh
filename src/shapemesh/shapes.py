@@ -38,14 +38,17 @@ import numpy as np
 
 from .constants import (
     COLLINEARITY_TOLERANCE,
+    CONNECTIVITY_TOLERANCE,
     PLANARITY_TOLERANCE,
     PLANE_ORTHOGONALITY_TOLERANCE,
+    TANGENCY_TOLERANCE,
 )
 from .errors import GeometryError, LabelError
 
 __all__ = [
     "Box",
     "Circle",
+    "CircleArc",
     "Cylinder",
     "Difference",
     "Disk",
@@ -55,6 +58,7 @@ __all__ = [
     "ExtrudeAlong",
     "Intersection",
     "Line",
+    "Path",
     "Point",
     "Polygon",
     "Polyline",
@@ -299,6 +303,19 @@ def _project_to_plane(direction: Vec3, normal: Vec3) -> Vec3:
     )
 
 
+def _rotate_about_axis(vector: Vec3, angle: float, axis: Vec3) -> Vec3:
+    """Rotate ``vector`` around a unit ``axis`` using Rodrigues' formula."""
+    cos_angle = math.cos(angle)
+    sin_angle = math.sin(angle)
+    cross = axis.cross(vector)
+    projection = axis.dot(vector) * (1.0 - cos_angle)
+    return Vec3(
+        vector.x * cos_angle + cross.x * sin_angle + axis.x * projection,
+        vector.y * cos_angle + cross.y * sin_angle + axis.y * projection,
+        vector.z * cos_angle + cross.z * sin_angle + axis.z * projection,
+    )
+
+
 def _plane_axes(normal: Vec3Like, x_axis: Vec3Like | None) -> tuple[Vec3, Vec3, Vec3]:
     """Return normalized normal, x, and y directions for a planar shape."""
     unit_normal = _normalize_direction(normal, "normal")
@@ -399,6 +416,16 @@ class Line(Shape):
     def dimension(self) -> int:
         """The topological dimension of the shape."""
         return 1
+
+    @property
+    def start_tangent(self) -> Vec3:
+        """The unit tangent at the line start, pointing toward the end."""
+        return (self.end - self.start).normalized()
+
+    @property
+    def end_tangent(self) -> Vec3:
+        """The unit tangent at the line end, pointing toward the end."""
+        return self.start_tangent
 
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
         occ = gmsh.model.occ
@@ -591,6 +618,250 @@ class Ellipse(Shape):
             xAxis=_xyz(major_axis),
         )
         return [(1, curve)]
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CircleArc(Shape):
+    """A circular arc in an arbitrary plane (1-dimensional).
+
+    The arc is the trajectory of rotating ``start`` around ``center`` by
+    ``angle`` radians about ``normal``. Positive angles follow the right-hand
+    rule; the sign of ``angle`` selects the sweep direction. Use `Circle` for a
+    full circle.
+
+    Args:
+        center: The circle center.
+        start: The arc start point on the circle.
+        angle: The signed sweep angle in radians, with
+            ``0 < abs(angle) < 2 * math.pi``.
+        normal: The plane normal (nonzero). The default is the global z-axis.
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If ``start`` coincides with ``center``, ``angle`` is zero
+            or at least a full turn, ``normal`` is invalid, or ``start`` is not
+            in the plane perpendicular to ``normal`` through ``center``.
+        LabelError: If ``label`` is invalid.
+    """
+
+    center: Vec3
+    start: Vec3
+    angle: float
+    normal: Vec3
+
+    def __init__(
+        self,
+        center: Vec3Like,
+        start: Vec3Like,
+        angle: float,
+        *,
+        normal: Vec3Like = (0, 0, 1),
+        label: str | None = None,
+    ) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "center", Vec3.from_any(center))
+        object.__setattr__(self, "start", Vec3.from_any(start))
+        object.__setattr__(self, "angle", angle)
+        object.__setattr__(self, "normal", normal)
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "angle", _finite_float(self.angle, "angle"))
+        normal = _normalize_direction(self.normal, "normal")
+        object.__setattr__(self, "normal", normal)
+        radial = self.start - self.center
+        radius = radial.length()
+        if radius == 0.0:
+            raise GeometryError("CircleArc start and center must be distinct")
+        if abs(normal.dot(radial)) > PLANE_ORTHOGONALITY_TOLERANCE * radius:
+            raise GeometryError(
+                "CircleArc start must lie in the plane perpendicular to normal through center"
+            )
+        if self.angle == 0.0:
+            raise GeometryError("CircleArc angle must be nonzero")
+        if abs(self.angle) >= 2.0 * math.pi:
+            raise GeometryError(
+                "CircleArc angle magnitude must be less than 2 * math.pi; "
+                "use Circle for a full circle"
+            )
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the shape."""
+        return 1
+
+    @property
+    def radius(self) -> float:
+        """The arc radius."""
+        return (self.start - self.center).length()
+
+    @property
+    def end(self) -> Vec3:
+        """The arc end point."""
+        return self.center + _rotate_about_axis(
+            self.start - self.center,
+            self.angle,
+            self.normal,
+        )
+
+    @property
+    def start_tangent(self) -> Vec3:
+        """The unit tangent at the arc start, pointing along the sweep."""
+        tangent = self.normal.cross(self.start - self.center).normalized()
+        return tangent if self.angle > 0.0 else -tangent
+
+    @property
+    def end_tangent(self) -> Vec3:
+        """The unit tangent at the arc end, pointing along the sweep."""
+        tangent = self.normal.cross(self.end - self.center).normalized()
+        return tangent if self.angle > 0.0 else -tangent
+
+    @property
+    def _midpoint(self) -> Vec3:
+        """The point halfway along the arc."""
+        return self.center + _rotate_about_axis(
+            self.start - self.center,
+            self.angle / 2.0,
+            self.normal,
+        )
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        occ = gmsh.model.occ
+        start = occ.addPoint(self.start.x, self.start.y, self.start.z, 0.0)
+        midpoint = self._midpoint
+        through = occ.addPoint(midpoint.x, midpoint.y, midpoint.z, 0.0)
+        end = occ.addPoint(self.end.x, self.end.y, self.end.z, 0.0)
+        curve = occ.addCircleArc(start, through, end, center=False)
+        occ.remove([(0, through)], recursive=False)
+        return [(1, curve)]
+
+
+type PathSegment = Line | CircleArc
+
+
+def _coerce_path_segments(
+    segments: tuple[Shape | Sequence[Shape], ...],
+) -> tuple[Shape, ...]:
+    """Flatten a single-sequence path argument into individual segments.
+
+    Paths accept either variadic segments (``Path(line, arc)``) or a single
+    sequence (``Path([line, arc])``), matching the boolean constructors.
+    """
+    if len(segments) == 1:
+        single = segments[0]
+        if isinstance(single, (str, bytes)):
+            raise GeometryError("Path segments must be Shape instances or a sequence of Shape")
+        if isinstance(single, Sequence):
+            return tuple(single)
+    return cast(tuple[Shape, ...], segments)
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class Path(Shape):
+    """An ordered, tangent-continuous chain of one-dimensional segments.
+
+    Every consecutive pair of segments must connect end-to-start and share the
+    same tangent direction. A path is closed when its first start and last end
+    coincide; the closure joint must also be tangent-continuous. `Path` is the
+    supported multi-segment guide for `ExtrudeAlong`.
+
+    Args:
+        segments: Two or more `Line` or `CircleArc` segments in path order,
+            passed either variadically (``Path(line, arc)``) or as one
+            sequence (``Path([line, arc])``).
+        label: An optional physical-group name.
+
+    Raises:
+        GeometryError: If there are fewer than 2 segments, a segment is not a
+            `Line` or `CircleArc`, consecutive segments are disconnected, or the
+            path is not tangent-continuous.
+        LabelError: If ``label`` is invalid.
+    """
+
+    segments: tuple[PathSegment, ...]
+
+    def __init__(
+        self,
+        *args: Shape | Sequence[Shape],
+        segments: tuple[Shape, ...] | None = None,
+        label: str | None = None,
+    ) -> None:
+        if segments is not None:
+            if args:
+                raise TypeError("segments cannot be supplied both positionally and by keyword")
+            args = (segments,)
+        object.__setattr__(self, "label", label)
+        object.__setattr__(
+            self,
+            "segments",
+            cast(tuple[PathSegment, ...], _coerce_path_segments(args)),
+        )
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        for segment in self.segments:
+            if not isinstance(segment, Shape):
+                raise GeometryError(
+                    f"Path segments must be Shape instances, got {type(segment).__name__}"
+                )
+            if not isinstance(segment, (Line, CircleArc)):
+                raise GeometryError("Path segments must be Line or CircleArc instances")
+        if len(self.segments) < 2:
+            raise GeometryError("Path requires at least 2 segments")
+        scale = self._scale()
+        for previous, current in pairwise(self.segments):
+            if (previous.end - current.start).length() > CONNECTIVITY_TOLERANCE * scale:
+                raise GeometryError("Path segments must connect end-to-start")
+            if not _tangents_align(previous.end_tangent, current.start_tangent):
+                raise GeometryError("Path segments must be tangent-continuous")
+        if self.closed:
+            last = self.segments[-1]
+            first = self.segments[0]
+            if not _tangents_align(last.end_tangent, first.start_tangent):
+                raise GeometryError("closed Path must be tangent-continuous at the closure")
+        Shape.__post_init__(self)
+
+    @property
+    def dimension(self) -> int:
+        """The topological dimension of the shape."""
+        return 1
+
+    @property
+    def start(self) -> Vec3:
+        """The start point of the first segment."""
+        return self.segments[0].start
+
+    @property
+    def end(self) -> Vec3:
+        """The end point of the last segment."""
+        return self.segments[-1].end
+
+    @property
+    def closed(self) -> bool:
+        """Whether the path is closed (first start equals last end)."""
+        return (self.segments[0].start - self.segments[-1].end).length() <= (
+            CONNECTIVITY_TOLERANCE * self._scale()
+        )
+
+    def _scale(self) -> float:
+        points: list[Vec3] = []
+        for segment in self.segments:
+            points.append(segment.start)
+            points.append(segment.end)
+            if isinstance(segment, CircleArc):
+                points.append(segment._midpoint)
+        scale = _bbox_diagonal(points)
+        return scale if scale > 0.0 else 1.0
+
+    def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
+        curves: list[tuple[int, int]] = []
+        for segment in self.segments:
+            realized = segment._realize(gmsh)
+            if len(realized) != 1 or realized[0][0] != 1:
+                raise GeometryError("Path segments must realize as exactly one curve")
+            curves.extend(realized)
+        return curves
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -949,6 +1220,11 @@ class Cylinder(Shape):
 
 
 # -- validation helpers ----------------------------------------------------
+
+
+def _tangents_align(first: Vec3, second: Vec3) -> bool:
+    """Return whether two unit tangents point the same way within tolerance."""
+    return first.dot(second) > 0.0 and first.cross(second).length() <= TANGENCY_TOLERANCE
 
 
 def _validate_polyline(points: tuple[Vec3, ...]) -> None:
@@ -1418,12 +1694,14 @@ class Revolve(Shape):
 
 @dataclass(frozen=True, slots=True, init=False)
 class ExtrudeAlong(Shape):
-    """Extrusion of a profile along one smooth guide curve.
+    """Extrusion of a profile along a smooth guide curve or path.
 
-    The guide must realize as exactly one curve suitable for `occ.addPipe`. Lines, circles,
-    ellipses, and revolution-generated arcs are supported. Multi-segment wires and sharp paths are
-    rejected. Profile placement and orientation follow OCC pipe semantics; they are not inferred
-    automatically. Extrusion increases the profile's dimension by one.
+    The guide must be either exactly one curve suitable for `occ.addPipe` or a
+    tangent-continuous `Path`. Lines, circles, ellipses, circular arcs, and
+    revolution-generated arcs are supported as single-curve guides. Multi-curve
+    `Union` and `Polyline` guides and sharp paths are rejected. Profile placement
+    and orientation follow OCC pipe semantics; they are not inferred automatically.
+    Extrusion increases the profile's dimension by one.
 
     Labels on both the profile and guide are consumed; only the operation node's own label is used.
 
@@ -1433,8 +1711,8 @@ class ExtrudeAlong(Shape):
         label: An optional physical-group name.
 
     Raises:
-        GeometryError: If the profile or guide has an invalid type or dimension, or the guide does
-            not realize as exactly one curve.
+        GeometryError: If the profile or guide has an invalid type or dimension, or the guide is
+            not a single smooth curve or a `Path`.
         LabelError: If ``label`` is invalid.
     """
 
@@ -1463,9 +1741,17 @@ class ExtrudeAlong(Shape):
     def _realize(self, gmsh: Any) -> list[tuple[int, int]]:
         source = self.operand._realize(gmsh)
         guide = self.guide._realize(gmsh)
-        if len(guide) != 1:
-            raise GeometryError("guide must realize as exactly one smooth curve")
-        wire = gmsh.model.occ.addWire([guide[0][1]], checkClosed=False)
+        if isinstance(self.guide, Path):
+            if len(guide) != len(self.guide.segments):
+                raise GeometryError("Path guide must realize as exactly one curve per segment")
+        elif len(guide) != 1:
+            raise GeometryError(
+                "guide must realize as exactly one smooth curve or a Path; "
+                "use Path(...) for multiple segments"
+            )
+        if any(dim != 1 for dim, _ in guide):
+            raise GeometryError("guide must realize as one-dimensional curves")
+        wire = gmsh.model.occ.addWire([tag for _, tag in guide], checkClosed=False)
         out = gmsh.model.occ.addPipe(source, wire, trihedron="DiscreteTrihedron")
         result = _filter_extrusion_result(out, self.dimension, type(self).__name__)
         gmsh.model.occ.remove(source, recursive=True)
