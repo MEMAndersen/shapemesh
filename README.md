@@ -3,7 +3,8 @@
 [![CI](https://github.com/MEMAndersen/shapemesh/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MEMAndersen/shapemesh/actions/workflows/ci.yml)
 
 A Gmsh-powered geometry and meshing library: a small, closed set of 0–3D
-shapes, n-ary booleans, and entity-level MSH 4.1 I/O.
+shapes, n-ary booleans, rigid transforms, extrusions, and entity-level MSH 4.1
+I/O.
 
 > **Status:** v0.1.0 — initial release.
 
@@ -12,8 +13,9 @@ shapes, n-ary booleans, and entity-level MSH 4.1 I/O.
 shapemesh is an easy-to-use wrapper for the powerful Gmsh meshing library. It
 simplifies creating complex geometries and meshing them into three steps:
 create primitive 1D to 3D shapes using the `Shape` primitives — for example a
-`Line`, `Polygon`, or `Box`; combine them with boolean operations such as `Union`
-and rigid transforms such as `Translate` and `Rotate`; and label them. Labels
+`Line`, `Polygon`, or `Box`; combine them with boolean operations such as `Union`,
+rigid transforms such as `Translate` and `Rotate`, or extrusions such as `Extrude`
+and `Revolve`; and label them. Labels
 become Gmsh physical groups, so after calling `build()` you can query the elements
 belonging to each labelled shape.
 
@@ -26,6 +28,8 @@ belonging to each labelled shape.
   sequence constructors.
 - **Rigid transforms:** `Translate` and `Rotate` compose with primitives and
   booleans in the immutable shape graph.
+- **Extrusions:** `Extrude`, `Revolve`, and smooth-guide `ExtrudeAlong` raise a
+  0D–2D shape's dimension by one and compose with the rest of the graph.
 - **Overlapping physical groups:** labels are preserved across Gmsh fragment
   remapping, so an intersection volume can belong to multiple groups.
 - **MSH 4.1 ASCII I/O:** read and write entity-classified meshes, with or
@@ -97,6 +101,7 @@ Examples covering structural workflows and element-node data access live in
 - [`examples/element_coordinates.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/element_coordinates.py)
 - [`examples/block_views.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/block_views.py)
 - [`examples/transforms.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/transforms.py)
+- [`examples/extrusions.py`](https://github.com/MEMAndersen/shapemesh/blob/main/examples/extrusions.py)
 
 ## Documentation
 

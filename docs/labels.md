@@ -21,10 +21,10 @@ becomes its own entity:
 So an entity can belong to multiple physical groups, which is what MSH 4.1's
 `$Entities` physical-tag list represents.
 
-## Booleans and transforms consume labels
+## Booleans, transforms, and extrusions consume labels
 
-A boolean or transform result only carries its *own* label. The labels of its
-operands are consumed and silently dropped:
+A boolean, transform, or extrusion result only carries its *own* label. The
+labels of its operands are consumed and silently dropped:
 
 ```python
 # "a" and "b" are gone; only "result" survives.
@@ -32,6 +32,16 @@ build(Union(Box(...), Box(...), label="result"), settings)
 
 # "inner" is gone; only "outer" survives.
 build(Translate(Box(..., label="inner"), (1, 0, 0), label="outer"), settings)
+
+# "profile" and "guide" are gone; only "swept" survives.
+build(
+    ExtrudeAlong(
+        Rectangle(..., label="profile"),
+        Line(..., label="guide"),
+        label="swept",
+    ),
+    settings,
+)
 ```
 
 ## Label rules
