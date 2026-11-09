@@ -138,6 +138,7 @@ Rules:
 - Direction vectors use scale-safe normalization. An explicit x-axis must be perpendicular to the normal within `1e-12` after normalization; the small remaining normal component is projected out before realization.
 - `CircleArc` sweeps `start` around `center` by a signed `angle` about `normal` using the right-hand rule. The start radial must be perpendicular to `normal`, and `0 < abs(angle) < 2 * math.pi`; use `Circle` for a full circle.
 - `Path` is an ordered chain of two or more `Line` or `CircleArc` segments, passed either variadically (``Path(line, arc)``) or as one sequence (``Path([line, arc])``), matching the boolean constructors. Consecutive endpoints must coincide within `1e-7 * scale`, and consecutive tangents must agree within a sine tolerance of `1e-7`. A path whose first start and last end coincide is closed and must also be tangent-continuous at the closure. Segment labels are consumed; the `Path` label applies to every realized curve.
+- `Polyline` exposes read-only `start` and `end` properties returning `points[0]` and `points[-1]`; a closed polyline has equal endpoints.
 - `Point` is rejected as a vertex coordinate; use `.coord`.
 - `label` is keyword-only, non-empty, stripped, at most 127 characters (a defensive cap; MSH 4.1 imposes no such limit), and must not contain quotes or newlines.
 - Shapes are frozen and hashable.

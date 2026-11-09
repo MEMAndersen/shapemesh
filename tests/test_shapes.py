@@ -160,6 +160,21 @@ def test_line_rejects_identical_endpoints():
         Line((0, 0, 0), (0, 0, 0))
 
 
+def test_polyline_endpoints():
+    polyline = Polyline([(0, 0, 0), (1, 0, 0), (1, 1, 0)])
+    assert isinstance(polyline.start, Vec3)
+    assert isinstance(polyline.end, Vec3)
+    assert polyline.start == Vec3(0, 0, 0)
+    assert polyline.end == Vec3(1, 1, 0)
+
+    segment = Polyline([(2, 3), (4, 5)])
+    assert segment.start == Vec3(2, 3)
+    assert segment.end == Vec3(4, 5)
+
+    closed = Polyline([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 0)])
+    assert closed.start == closed.end == Vec3(0, 0, 0)
+
+
 def test_polyline_closed():
     assert Polyline([(0, 0, 0), (1, 0, 0)]).closed is False
     closed = Polyline([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 0)])

@@ -468,6 +468,16 @@ class Polyline(Shape):
         return 1
 
     @property
+    def start(self) -> Vec3:
+        """The first point of the polyline."""
+        return self.points[0]
+
+    @property
+    def end(self) -> Vec3:
+        """The last point of the polyline."""
+        return self.points[-1]
+
+    @property
     def closed(self) -> bool:
         """Whether the polyline is closed (first point equals last point)."""
         return self.points[0] == self.points[-1]
