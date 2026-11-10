@@ -6,7 +6,7 @@ A Gmsh-powered geometry and meshing library: a small, closed set of 0–3D
 shapes, n-ary booleans, rigid transforms, extrusions, and entity-level MSH 4.1
 I/O.
 
-> **Status:** v0.1.0 — initial release.
+> **Status:** v0.3.0 — latest release.
 
 ## Why shapemesh?
 

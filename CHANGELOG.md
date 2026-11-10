@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] - 2026-11-10
+
+### Added
+
+- Add arbitrary plane orientation to `Circle`, `Disk`, `Ellipse`, and `EllipticalDisk` through `normal` and optional `x_axis` ([`#6`](https://github.com/MEMAndersen/shapemesh/pull/6)) (Mads Kruse)
+- Add `Translate` and `Rotate` shape nodes for rigid transformations ([`#7`](https://github.com/MEMAndersen/shapemesh/pull/7)) (Mads Kruse)
+- Add `Extrude`, `Revolve`, and `ExtrudeAlong` shape nodes for dimension-raising operations ([`#8`](https://github.com/MEMAndersen/shapemesh/pull/8)) (Mads Kruse)
+- Add `CircleArc` and tangent-continuous `Path` guides, including multi-segment `ExtrudeAlong` sweeps ([`#9`](https://github.com/MEMAndersen/shapemesh/pull/9)) (Mads Kruse)
+- Add read-only `Polyline.start` and `Polyline.end` endpoint properties ([`#10`](https://github.com/MEMAndersen/shapemesh/pull/10)) (Mads Kruse)
+
 ## [0.2.0] - 2026-11-01
 
 ### Changed
@@ -23,5 +33,6 @@ _First release._
 - Add 1D, 2D, and 3D examples and documentation for labels, threading, and the Gmsh version policy ([`cde6dc0`](https://github.com/MEMAndersen/shapemesh/commit/cde6dc0), [`413dc02`](https://github.com/MEMAndersen/shapemesh/commit/413dc02)) (Mads Kruse)
 - Support Python 3.12 through 3.15 on Linux, macOS, and Windows with Gmsh 4.0 or later ([`4f941e1`](https://github.com/MEMAndersen/shapemesh/commit/4f941e1), [`b605815`](https://github.com/MEMAndersen/shapemesh/commit/b605815)) (Mads Kruse)
 
+[0.3.0]: https://github.com/MEMAndersen/shapemesh/releases/tag/v0.3.0
 [0.2.0]: https://github.com/MEMAndersen/shapemesh/releases/tag/v0.2.0
 [0.1.0]: https://github.com/MEMAndersen/shapemesh/releases/tag/v0.1.0
